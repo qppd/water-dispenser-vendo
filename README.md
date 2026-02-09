@@ -16,18 +16,105 @@ A smart water dispenser vending machine project built on ESP32 microcontroller, 
 
 ## Table of Contents
 
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [System Diagrams](#system-diagrams)
+- [Serial Communication Protocol](#serial-communication-protocol)
 - [Features](#features)
 - [Hardware Requirements](#hardware-requirements)
-- [Software Requirements](#software-requirements)
-- [Project Structure](#project-structure)
+- [Software Components](#software-components)
 - [Installation](#installation)
-- [Configuration](#configuration)
 - [Usage](#usage)
-- [Wiring](#wiring)
-- [API Reference](#api-reference)
-- [Troubleshooting](#troubleshooting)
+- [Wiring Diagram](#wiring-diagram)
+- [Hardware Models](#hardware-models)
+- [Project Structure](#project-structure)
+- [Configuration](#configuration)
+- [System Integration](#system-integration)
+- [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
+- [Contact](#contact)
+
+## Overview
+
+The Water Dispenser Vending Machine is an automated system designed to dispense water in exchange for coin and bill payments. Built using an ESP32 microcontroller for the core vending logic and a Raspberry Pi for host monitoring, this project demonstrates the integration of embedded systems, payment processing, and user interface design.
+
+The system accepts Philippine currency (coins: P1, P5, P10, P20; bills: P20, P50, P100) through dedicated hardware interfaces, accumulates credits, and dispenses water automatically when the required amount is reached. Audio feedback and serial communication provide real-time status updates.
+
+This project serves as a comprehensive example of IoT device development, combining hardware interfacing, firmware programming, and software integration for a practical vending application.
+
+## Architecture
+
+The system follows a distributed architecture with two main components:
+
+### ESP32 Client (Vending Machine Core)
+- **Role**: Handles payment processing, credit management, and dispensing control
+- **Responsibilities**: 
+  - Interrupt-driven coin and bill detection
+  - Credit accumulation and validation
+  - Relay control for water dispensing
+  - Audio feedback generation
+  - Serial communication for status reporting
+
+### Raspberry Pi Host (Monitoring and Control)
+- **Role**: Provides higher-level monitoring and potential future extensions
+- **Responsibilities**:
+  - Serial data reception from ESP32
+  - Data logging and processing
+  - User interface (GUI via CustomTkinter)
+  - Network connectivity for remote monitoring
+
+### Communication Layer
+- Serial communication (UART) between ESP32 and Raspberry Pi
+- Standardized message format for status updates and commands
+
+## System Diagrams
+
+### High-Level System Architecture
+```
+[User] --> [Coin/Bill Input] --> [ESP32] <--Serial--> [Raspberry Pi] --> [Display/Monitoring]
+                    |                           |
+                    v                           v
+              [Credit Logic]              [Data Processing]
+                    |                           |
+                    v                           v
+              [Dispensing Relay]          [Storage/Logging]
+```
+
+### Hardware Block Diagram
+```
+ESP32 DevKitC
+├── GPIO 4: Coin Slot Interrupt
+├── GPIO 26: Bill Acceptor Interrupt  
+├── GPIO 27: Buzzer PWM Output
+├── GPIO 23: Relay Control Output
+└── UART: Serial Communication
+
+Raspberry Pi 4
+└── USB/Serial: ESP32 Connection
+```
+
+## Serial Communication Protocol
+
+The system uses a simple text-based serial protocol at 9600 baud for communication between ESP32 and Raspberry Pi.
+
+### Message Format
+```
+<TYPE>: <DETAILS> | <ADDITIONAL_INFO>
+```
+
+### Message Types
+- **Coin Acceptance**: `Coin accepted: P<VALUE> | Coin Credit: P<TOTAL>`
+- **Bill Acceptance**: `Bill accepted: P<VALUE> | Bill Credit: P<TOTAL>`
+- **Dispensing**: `Dispensed water`
+- **System Status**: Various debug and status messages
+
+### Example Communication Sequence
+```
+ESP32: Coin accepted: P5 | Coin Credit: P5
+ESP32: Bill accepted: P20 | Bill Credit: P20
+ESP32: Dispensed water
+```
 
 ## Features
 
@@ -58,16 +145,32 @@ A smart water dispenser vending machine project built on ESP32 microcontroller, 
 | Buzzer | GPIO 27 | PWM output for audio feedback |
 | Relay | GPIO 23 | Digital output for dispensing control |
 
-## Software Requirements
+## Software Components
 
+### ESP32 Firmware Requirements
 - Arduino IDE 1.8.x or later
 - ESP32 Board Support Package
-- Arduino ESP32 Core
+- Arduino ESP32 Core (version 2.0.0 or higher)
 
-### Dependencies
-
+### ESP32 Dependencies
 - Arduino.h (included with ESP32 core)
 - Standard C++ libraries
+- ESP32-specific libraries for GPIO and serial communication
+
+### Raspberry Pi Host Requirements
+- Python 3.7 or higher
+- pip package manager
+- Linux operating system (Raspberry Pi OS recommended)
+
+### Raspberry Pi Dependencies
+- pyserial (for serial communication)
+- customtkinter (for modern GUI interface)
+- Standard Python libraries (os, time, glob)
+
+### Development Tools
+- Git (for version control)
+- Fritzing (for circuit design, optional)
+- Text editor or IDE (VS Code, Arduino IDE)
 
 ## Project Structure
 
@@ -170,7 +273,7 @@ Bill accepted: P20 | Bill Credit: P20
 Dispensed water
 ```
 
-## Wiring
+## Wiring Diagram
 
 Refer to the `wiring/` directory for detailed wiring diagrams.
 
@@ -184,6 +287,26 @@ Refer to the `wiring/` directory for detailed wiring diagrams.
 - **Relay**: Connect control pin to GPIO 23, power relay coil appropriately
 
 ⚠️ **Safety Note**: Ensure proper power isolation between control circuits and high-power dispensing components.
+
+## Hardware Models
+
+The project includes 3D models and CAD files for custom hardware components. These can be found in the `models/` directory.
+
+### Available Models
+- **Enclosure Design**: 3D printable case for the vending machine
+- **Mounting Brackets**: Custom brackets for hardware components
+- **Adapter Plates**: Interface plates for different hardware configurations
+
+### File Formats
+- STL files for 3D printing
+- STEP files for CAD software
+- Fritzing files for circuit prototyping
+
+### Usage
+1. Download the appropriate model files from the `models/` directory
+2. Open in your preferred CAD software or 3D printing application
+3. Modify as needed for your specific requirements
+4. Print or manufacture the components
 
 ## API Reference
 
@@ -238,6 +361,51 @@ Refer to the `wiring/` directory for detailed wiring diagrams.
 
 Enable serial debugging by connecting to the ESP32's serial port at 9600 baud.
 
+## System Integration
+
+### ESP32 and Raspberry Pi Integration
+The system integrates ESP32 firmware with Raspberry Pi host software through serial communication. The ESP32 handles real-time hardware interactions while the Raspberry Pi provides monitoring and potential future expansions.
+
+### Hardware Integration
+- **Power Management**: Separate power supplies for control circuits and high-power components
+- **Signal Isolation**: Optocouplers or isolation modules for safe interfacing
+- **Grounding**: Proper grounding to prevent noise and ensure reliable operation
+
+### Software Integration
+- **Serial Protocol**: Standardized message format for reliable data exchange
+- **Error Handling**: Robust error detection and recovery mechanisms
+- **Synchronization**: Time synchronization between devices if needed
+
+## Development
+
+### Development Environment Setup
+1. **ESP32 Development**:
+   - Install Arduino IDE
+   - Add ESP32 board support
+   - Configure board settings
+
+2. **Raspberry Pi Development**:
+   - Install Python and required packages
+   - Set up serial communication
+   - Configure GPIO if needed
+
+### Testing Procedures
+- **Unit Testing**: Test individual hardware components
+- **Integration Testing**: Verify ESP32-Raspberry Pi communication
+- **System Testing**: End-to-end testing with actual currency
+
+### Code Quality
+- Follow Arduino coding standards for ESP32 code
+- Use PEP 8 for Python code
+- Add comprehensive comments and documentation
+- Implement proper error handling
+
+### Version Control
+- Use Git for source code management
+- Follow semantic versioning
+- Maintain clear commit messages
+- Use branches for feature development
+
 ## Contributing
 
 1. Fork the repository
@@ -256,6 +424,14 @@ Enable serial debugging by connecting to the ESP32's serial port at 9600 baud.
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Contact
+
+**Project Author**: [qppd](https://github.com/qppd)
+
+For questions, issues, or contributions, please:
+- Open an issue on [GitHub](https://github.com/qppd/water-dispenser-vendo/issues)
+- Contact via GitHub profile
 
 ---
 
