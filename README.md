@@ -434,5 +434,3 @@ For questions, issues, or contributions, please:
 - Contact via GitHub profile
 
 ---
-
-**Note**: This project is for educational and prototyping purposes. Ensure compliance with local regulations for vending machine deployment.
