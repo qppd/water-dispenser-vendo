@@ -165,6 +165,8 @@ Dispensed water
 
 Refer to the `wiring/` directory for detailed wiring diagrams.
 
+![Water Dispenser Wiring Diagram](wiring/Water_Dispenser_Vendo.png)
+
 ### Basic Connections
 
 - **Coin Slot**: Connect signal pin to GPIO 4, power, and ground
