@@ -1,6 +1,3 @@
-## Author / Credits
-
-Developed and maintained by [qppd](https://github.com/qppd)
 # Water Dispenser Vending Machine
 
 [![Arduino](https://img.shields.io/badge/Arduino-00979D?style=for-the-badge&logo=Arduino&logoColor=white)](https://www.arduino.cc/)
@@ -11,8 +8,6 @@ Developed and maintained by [qppd](https://github.com/qppd)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/Build-Development-yellow.svg?style=for-the-badge)](https://github.com/qppd/water-dispenser-vendo)
 [![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg?style=for-the-badge)](https://github.com/qppd/water-dispenser-vendo/releases)
-
-A smart water dispenser vending machine project built on ESP32 microcontroller, featuring coin and bill acceptance, audio feedback, and automated dispensing.
 
 ## Table of Contents
 
