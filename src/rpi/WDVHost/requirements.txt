@@ -1,0 +1,5 @@
+# Python dependencies for WDVHost (Raspberry Pi kiosk)
+# Install with: pip install -r requirements.txt
+
+customtkinter>=5.2.0
+pyserial>=3.5
