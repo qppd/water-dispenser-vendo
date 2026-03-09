@@ -196,6 +196,18 @@ class DispensingPage(BasePage):
 
     def _show_done_dialog(self) -> None:
         sel = self.app_state.selection
+
+        # Print receipt on thermal printer (background thread — non-blocking)
+        from datetime import datetime
+        txn = {
+            "transaction_id": datetime.now().strftime("TXN-%Y%m%d-%H%M%S"),
+            "credit": sel.cost_pts,
+            "volume_ml": sel.volume_ml,
+            "service": sel.service,
+            "temperature": sel.temperature if sel.temperature else "N/A",
+        }
+        hardware_hooks.print_receipt(txn, printer=self.controller.printer)
+
         self.controller.show_alert(
             "Complete! 💧",
             f"Dispensed {sel.volume_ml} ml.\nRemaining points: {self.app_state.user.points}",

@@ -35,6 +35,8 @@ if _HERE not in sys.path:
 
 from app_state import AppState
 from serial_manager import SerialManager
+from qr_scanner import QRScanner
+from thermal_printer import ThermalPrinter
 from ui.theme import C, WIN_W, WIN_H, SIDEBAR_W
 
 # ── Import all page classes ───────────────────────────────────────────────────
@@ -105,6 +107,30 @@ class MainApp(ctk.CTk):
         )
         self.serial_mgr.start()
 
+        # ── QR scanner (USB HID keyboard-mode) ────────────────────────────────
+        self.qr_scanner = QRScanner(
+            event_queue=self.app_state.hw_event_queue,
+        )
+
+        # ── Thermal printer ───────────────────────────────────────────────────
+        # Priority: PRINTER_PORT env var → config.py → auto-detect.
+        # Printer runs independently of simulation_mode (sim only affects ESP32).
+        from config import PRINTER_PORT as _CFG_PORT
+        _env_port  = os.environ.get("PRINTER_PORT", "").strip()
+        _cfg_port  = "" if _CFG_PORT.strip().lower() == "auto" else _CFG_PORT.strip()
+        printer_port = _env_port or _cfg_port or ThermalPrinter.detect_port()
+
+        self.printer = ThermalPrinter(port=printer_port)
+        if printer_port:
+            connected = self.printer.connect()
+            if connected:
+                print(f"[MainApp] Thermal printer connected on {printer_port}.")
+            else:
+                print(f"[MainApp] Thermal printer found on {printer_port} but failed to connect.")
+        else:
+            print("[MainApp] No thermal printer detected – printing disabled.\n"
+                  "         Set PRINTER_PORT in config.py or as an env var (e.g. PRINTER_PORT=COM10).")
+
         # ── Layout: sidebar | content ─────────────────────────────────────────
         self.grid_columnconfigure(0, weight=0, minsize=SIDEBAR_W)
         self.grid_columnconfigure(1, weight=1)
@@ -127,8 +153,14 @@ class MainApp(ctk.CTk):
         self._pages: dict = {}
         self._build_pages()
 
+        # ── Previous-page tracker (used by QRScanPage to go back) ────────────
+        self.prev_page: str = "home"
+
         # ── Start on home ─────────────────────────────────────────────────────
         self.show_page("home")
+
+        # ── QR scanner — must start after window is built ─────────────────────
+        self.qr_scanner.start(tk_root=self)
 
         # ── Hardware event polling ────────────────────────────────────────────
         self._poll_hw_events()
@@ -168,6 +200,12 @@ class MainApp(ctk.CTk):
         if page is None:
             print(f"[MainApp] Unknown page: {name}")
             return
+
+        # Track previous page so pages like QRScanPage can navigate back
+        current = getattr(self, "_current_page", "home")
+        if current != name:
+            self.prev_page = current
+        self._current_page = name
 
         page.tkraise()
 
@@ -313,6 +351,8 @@ class MainApp(ctk.CTk):
                 self.sidebar.refresh()
             elif etype == "dispense_complete":
                 self.app_state.dispatch_dispense_complete()
+            elif etype == "QR_SCANNED":
+                self.app_state.dispatch_qr_scanned(event.get("data", ""))
             # "raw" lines are silently ignored here
 
         self.after(50, self._poll_hw_events)
@@ -320,7 +360,9 @@ class MainApp(ctk.CTk):
     # ── Shutdown ──────────────────────────────────────────────────────────────
 
     def _on_close(self) -> None:
+        self.qr_scanner.stop()
         self.serial_mgr.stop()
+        self.printer.disconnect()
         self.destroy()
 
 

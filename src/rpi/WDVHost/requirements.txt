@@ -3,3 +3,5 @@
 
 customtkinter>=5.2.0
 pyserial>=3.5
+qrcode[pil]>=7.0
+Pillow>=9.0

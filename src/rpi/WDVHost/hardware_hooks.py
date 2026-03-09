@@ -13,6 +13,7 @@ from app_state import ML_TO_MS
 
 if TYPE_CHECKING:
     from serial_manager import SerialManager
+    from thermal_printer import ThermalPrinter
 
 
 def insert_coin(value: int, serial_mgr: "SerialManager") -> None:
@@ -75,13 +76,41 @@ def scan_qr(serial_mgr: "SerialManager") -> None:
     serial_mgr.send_command("CMD:QR_SCAN")
 
 
-def print_qr(username: str, serial_mgr: "SerialManager") -> None:
+def print_qr(username: str, serial_mgr: "SerialManager", printer: "ThermalPrinter | None" = None) -> None:
     """
-    Send a QR print command to an attached receipt printer module.
-    The username is embedded in the payload so the printer can generate
-    the correct QR code.
+    Print a QR code containing the username to the thermal receipt printer.
+    Falls back to sending a serial command to the ESP32 if no local printer
+    is available.
     """
-    serial_mgr.send_command(f"CMD:PRINT_QR:{username}")
+    if printer and printer.is_connected():
+        qr_data = f"USER:{username}"
+        printer.print_qr(
+            data=qr_data,
+            header="AQUA SPLASH",
+            subheader=f"User: {username}",
+        )
+    else:
+        serial_mgr.send_command(f"CMD:PRINT_QR:{username}")
+
+
+def print_receipt(
+    transaction: dict,
+    printer: "ThermalPrinter | None" = None,
+) -> None:
+    """
+    Print a dispensing receipt on the thermal printer.
+
+    Parameters
+    ----------
+    transaction : dict
+        Keys: transaction_id, credit, volume_ml, service, temperature.
+    printer : ThermalPrinter | None
+        The connected ThermalPrinter instance.
+    """
+    if printer and printer.is_connected():
+        printer.print_receipt(transaction)
+    else:
+        print("[hardware_hooks] Printer unavailable \u2013 skipping receipt.")
 
 
 def request_temperature(temp: str, serial_mgr: "SerialManager") -> None:

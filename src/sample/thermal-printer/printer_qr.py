@@ -191,11 +191,11 @@ class ESCPOSFormatter:
             via :meth:`BluetoothPrinter.send`.
 
         ESC/POS function mapping:
-            * ``0xA5`` – Select QR model
-            * ``0xA7`` – Set module (dot) size
-            * ``0xA9`` – Set error correction level
-            * ``0xB0`` – Store QR data in symbol storage area
-            * ``0xB1`` – Print the stored symbol
+            * ``0x41`` – Select QR model
+            * ``0x43`` – Set module (dot) size
+            * ``0x45`` – Set error correction level
+            * ``0x50`` – Store QR data in symbol storage area
+            * ``0x51`` – Print the stored symbol
         """
         # Clamp and map parameters to ESC/POS byte values.
         size       = max(1, min(size, 16))
@@ -212,16 +212,16 @@ class ESCPOSFormatter:
         pH = (store_len >> 8) & 0xFF
 
         return (
-            # Function 0xA5: select QR model
-            GS + b"(k\x04\x00\x31\xa5" + bytes([model_byte]) + b"\x00"
-            # Function 0xA7: set module size
-            + GS + b"(k\x03\x00\x31\xa7" + bytes([size])
-            # Function 0xA9: set error correction level
-            + GS + b"(k\x03\x00\x31\xa9" + bytes([ec_byte])
-            # Function 0xB0: store QR data
-            + GS + b"(k" + bytes([pL, pH]) + b"\x31\xb0\x30" + data_bytes
-            # Function 0xB1: print the stored QR symbol
-            + GS + b"(k\x03\x00\x31\xb1\x30"
+            # fn 0x41 (65): select QR model
+            GS + b"(k\x04\x00\x31\x41" + bytes([model_byte]) + b"\x00"
+            # fn 0x43 (67): set module (dot) size
+            + GS + b"(k\x03\x00\x31\x43" + bytes([size])
+            # fn 0x45 (69): set error correction level
+            + GS + b"(k\x03\x00\x31\x45" + bytes([ec_byte])
+            # fn 0x50 (80): store QR data in symbol storage area
+            + GS + b"(k" + bytes([pL, pH]) + b"\x31\x50\x30" + data_bytes
+            # fn 0x51 (81): print the stored QR symbol
+            + GS + b"(k\x03\x00\x31\x51\x30"
         )
 
 

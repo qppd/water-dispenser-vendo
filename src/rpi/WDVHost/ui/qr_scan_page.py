@@ -1,9 +1,12 @@
 """
 ui/qr_scan_page.py - QR scanner animation + login (page-qr-scan).
 
-In real hardware, the ESP32-attached QR reader would emit a "QR:{username}"
-serial event.  In simulation mode, the first stored account is loaded after
-2 s — mirroring the HTML simulation behaviour.
+In real hardware, a USB HID keyboard-mode QR scanner emits keystrokes
+captured by QRScanner → puts a QR_SCANNED event on the hw_event_queue
+→ dispatched here via the AppState callback.
+
+In simulation mode (--sim, or no scanner), the first stored account
+is loaded after a 4 s timeout — mirroring the HTML simulation behaviour.
 """
 
 from __future__ import annotations
@@ -15,6 +18,9 @@ from ui.theme import C, F, PAD
 from app_state import User
 import storage
 import hardware_hooks
+
+# Idle timeout — if no QR is scanned within this period, go back to previous page.
+_IDLE_TIMEOUT_MS = 30_000
 
 
 class QRScanPage(BasePage):
@@ -66,7 +72,7 @@ class QRScanPage(BasePage):
 
         self.make_button(
             center, "← Cancel",
-            command=lambda: self.controller.show_page("home"),
+            command=self._cancel,
             color=C["btn_back"],
             height=40,
             font=F["small"],
@@ -77,17 +83,30 @@ class QRScanPage(BasePage):
         self._bar_dir    = 1
         self._anim_job: Optional[str] = None
         self._scan_job:  Optional[str] = None
+        self._got_scan:  bool = False
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def on_show(self) -> None:
+        self._got_scan = False
+
+        # Send trigger to ESP32-attached QR reader (if any)
         hardware_hooks.scan_qr(self.controller.serial_mgr)
+
+        # Register for QR_SCANNED events from the USB HID scanner
+        self.app_state.register_qr_callback(self._on_qr_scanned)
+
         self._bar_y   = 0
         self._bar_dir = 1
         self._animate_bar()
 
-        # Simulate QR result after 2 s (matches HTML simulation)
-        self._scan_job = self.after(2000, self._process_scan)
+        # After 30 s with no scan, silently return to the previous page.
+        self._scan_job = self.after(_IDLE_TIMEOUT_MS, self._on_timeout)
+
+    def _cancel(self) -> None:
+        self._stop()
+        self.app_state.register_qr_callback(None)
+        self.controller.show_page("home")
 
     def _stop(self) -> None:
         if self._anim_job:
@@ -111,22 +130,59 @@ class QRScanPage(BasePage):
         self._bar.place(x=0, y=self._bar_y, relwidth=1.0)
         self._anim_job = self.after(16, self._animate_bar)  # ~60 fps
 
-    # ── QR result processing ──────────────────────────────────────────────────
+    # ── QR event callback (from USB HID scanner via AppState) ─────────────────
 
-    def _process_scan(self) -> None:
+    def _on_qr_scanned(self, data: str) -> None:
         """
-        In hardware mode the ESP32 sends "QR:{username}" back which the
-        SerialManager would parse and put on the event queue.
-        Here we simulate by loading the first stored account.
+        Called on the main thread when a QR_SCANNED event is dispatched.
+
+        Expected data formats:
+            USER:<username>
+            PAY:<amount>
+            TXN:<transaction_id>
         """
+        if self._got_scan:
+            return
+        self._got_scan = True
         self._stop()
-        users = storage.list_all_users()
-        if users:
-            user = User.from_dict(users[0])
+        self.app_state.register_qr_callback(None)
+
+        # Parse the QR data
+        if data.startswith("USER:"):
+            username = data[5:].strip()
+            self._login_by_username(username)
+        else:
+            # Treat raw data as a username lookup
+            self._login_by_username(data.strip())
+
+    def _login_by_username(self, username: str) -> None:
+        """Look up the user by username and log in."""
+        user_dict = storage.load_user(username)
+        if user_dict:
+            user = User.from_dict(user_dict)
             self.app_state.login(user)
             self.app_state.history.clear()
             self.controller.sidebar.refresh()
             self.controller.show_page("dashboard")
         else:
-            self.controller.show_alert("Not Found", "No registered account found.")
-            self.controller.show_page("home")
+            # Stay on this page — let the user try again or cancel.
+            self._got_scan = False
+            self.controller.show_alert(
+                "Not Found",
+                f"No account found for \"{username}\".\nPlease try again or press Cancel.",
+            )
+            # Restart the idle timeout after alert is dismissed.
+            if self._scan_job:
+                self.after_cancel(self._scan_job)
+            self._scan_job = self.after(_IDLE_TIMEOUT_MS, self._on_timeout)
+
+    # ── Idle timeout ──────────────────────────────────────────────────────────
+
+    def _on_timeout(self) -> None:
+        """Called after 30 s of no scan — go back to the page we came from."""
+        if self._got_scan:
+            return
+        self._stop()
+        self.app_state.register_qr_callback(None)
+        prev = getattr(self.controller, "prev_page", "home")
+        self.controller.show_page(prev)

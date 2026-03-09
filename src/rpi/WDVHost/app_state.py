@@ -135,6 +135,7 @@ class AppState:
         self._on_coin: Optional[Callable[[int], None]] = None
         self._on_bill: Optional[Callable[[int], None]] = None
         self._on_dispense_complete: Optional[Callable[[], None]] = None
+        self._on_qr_scanned: Optional[Callable[[str], None]] = None
 
     # ── User helpers ──────────────────────────────────────────────────────────
 
@@ -218,10 +219,16 @@ class AppState:
     ) -> None:
         self._on_dispense_complete = cb
 
+    def register_qr_callback(
+        self, cb: Optional[Callable[[str], None]]
+    ) -> None:
+        self._on_qr_scanned = cb
+
     def clear_callbacks(self) -> None:
         self._on_coin = None
         self._on_bill = None
         self._on_dispense_complete = None
+        self._on_qr_scanned = None
 
     def dispatch_coin(self, value: int) -> None:
         if self._on_coin:
@@ -234,3 +241,7 @@ class AppState:
     def dispatch_dispense_complete(self) -> None:
         if self._on_dispense_complete:
             self._on_dispense_complete()
+
+    def dispatch_qr_scanned(self, data: str) -> None:
+        if self._on_qr_scanned:
+            self._on_qr_scanned(data)
