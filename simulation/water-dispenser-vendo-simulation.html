@@ -1,0 +1,572 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AquaSmart Kiosk - Master System</title>
+    <style>
+        :root {
+            --steel-light: #e0e0e0;
+            --steel-mid: #95a5a6;
+            --steel-dark: #7f8c8d;
+            --screen-bg: #e1f5fe; 
+            --aqua: #00a8ff;
+            --accent: #2ecc71; 
+            --danger: #e74c3c; 
+            --laser: #2ecc71;
+            --dark-blue: #0277bd; 
+            --case: linear-gradient(135deg, #bdc3c7 0%, #7f8c8d 50%, #bdc3c7 100%);
+            --water-gradient: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(179,229,252,0.8) 100%);
+        }
+
+        body { background: #1a1a1a; font-family: 'Segoe UI', Arial, sans-serif; display: flex; justify-content: center; padding: 20px; margin: 0; overflow-y: auto; }
+
+        #kiosk-setup { display: flex; flex-direction: column; align-items: center; }
+
+        #machine-shell {
+            width: 700px; background: var(--case); padding: 30px; border-radius: 0px 0px 0 0;
+            box-shadow: 0 50px 100px rgba(0,0,0,0.9), inset 0 0 50px rgba(255,255,255,0.2); 
+            border: 10px solid #535c68; display: flex; flex-direction: column; gap: 40px; z-index: 2; position: relative;
+        }
+
+        #machine-shell::before {
+            content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: repeating-linear-gradient(rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 2px);
+            pointer-events: none;
+        }
+
+        #machine-base {
+            width: 700px; height: 600px; background: var(--case); border: 10px solid #535c68;
+            border-top: none; border-radius: 0 0 20px 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            box-sizing: border-box; display: flex; justify-content: center; align-items: center; position: relative;
+        }
+
+        #machine-base::after {
+            content: ''; width: 550px; height: 450px; border: 4px solid #535c68;
+            border-radius: 10px; background: rgba(0,0,0,0.1);
+        }
+
+        #kiosk-inner {
+            width: 80%; margin: 0 auto; height: 350px; background: linear-gradient(to bottom, #7f8c8d, #bdc3c7, #7f8c8d);
+            border-radius: 20px; padding: 15px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column; border: 4px solid #535c68; box-sizing: border-box;
+        }
+
+        #screen { background: var(--screen-bg); flex: 1; border-radius: 10px; border: 6px solid #333; overflow: hidden; display: flex; position: relative; font-size: 13px; }
+        #sidebar { width: 160px; background: #01579b; color: white; padding: 10px; display: none; flex-direction: column; border-right: 2px solid #0277bd; box-sizing: border-box; }
+        #main-content { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; height: 100%; background: url('https://www.transparenttextures.com/patterns/cubes.png'); }
+        
+        .page { display: none; padding: 15px; flex-direction: column; height: 100%; box-sizing: border-box; overflow-y: auto; background: var(--water-gradient); }
+        .active { display: flex; }
+
+        .wavy-title {
+            font-size: 2.8rem; font-weight: 900; color: var(--dark-blue);
+            text-transform: uppercase; letter-spacing: 2px; position: relative;
+            display: inline-block; animation: wave 2s ease-in-out infinite;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        @keyframes wave {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            25% { transform: translateY(-5px) rotate(-2deg); }
+            75% { transform: translateY(5px) rotate(2deg); }
+        }
+
+        h2 { font-size: 1.2rem; margin: 10px 0; color: var(--dark-blue); border-bottom: 2px solid var(--aqua); padding-bottom: 4px; }
+
+        #overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(1, 87, 155, 0.6); z-index: 999; }
+        #custom-alert { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 250px; background: white; border-radius: 15px; z-index: 1000; padding: 15px; text-align: center; border: 3px solid var(--aqua); }
+
+        .hardware-row { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; text-align: center; }
+        .slot-container { position: relative; height: 60px; background: #111; border: 3px solid #7f8c8d; border-radius: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .slot-label { color: #bdc3c7; font-size: 8px; font-weight: bold; margin-top: 35px; }
+        
+        .money-anim { width: 20px; height: 20px; background: #f1c40f; border-radius: 50%; position: absolute; top: -80px; opacity: 0; transition: 0.5s ease-in; z-index: 10; border: 2px solid #d4ac0d; }
+        .bill-anim { width: 40px; height: 20px; background: #27ae60; position: absolute; top: -80px; opacity: 0; transition: 0.5s ease-in; z-index: 10; border: 1px solid #1e8449; }
+        .active-money { top: 15px !important; opacity: 1 !important; }
+        #qr-hand { width: 40px; height: 40px; background: white; position: absolute; bottom: -100px; border: 2px solid #333; transition: 0.5s; z-index: 15; display: flex; justify-content: center; align-items: center; }
+        #receipt-paper { width: 40px; height: 0; background: white; position: absolute; top: 15px; transition: 1s; border: 1px solid #ddd; z-index: 5; overflow: hidden; font-size: 4px; text-align: center; }
+
+        #dispensing-bay { 
+            height: 300px; background: #c0c9cc; border: inset 20px #95a5a6; border-radius: 20px; 
+            position: relative; overflow: hidden; display: flex; justify-content: center;
+            box-shadow: inset 0 15px 30px rgba(0,0,0,0.2);
+        }
+
+        #nozzle-center { width: 15px; height: 20px; background: #636e72; position: absolute; top: 0; left: 50%; transform: translateX(-50%); border-radius: 0 0 5px 5px; z-index: 5; }
+        #vertical-stream { width: 8px; height: 200px; background: var(--aqua); position: absolute; top: 10px; left: 50%; transform: translateX(-50%); opacity: 0; transition: 0.2s; z-index: 4; }
+        #drain-hole { width: 50px; height: 14px; background: #1a1a1a; border-radius: 50%; position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); box-shadow: inset 0 2px 5px #000; z-index: 1; }
+
+        #bottle { width: 35px; height: 60px; background: rgba(255,255,255,0.4); border: 2px solid rgba(255,255,255,0.8); border-radius: 6px 6px 10px 10px; position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%); transition: 0.5s; opacity: 0; z-index: 3; }
+        #bottle::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 0; background: var(--aqua); transition: height 2.5s linear; border-radius: 0 0 8px 8px; }
+        .bottle-full::after { height: 100% !important; }
+        .bottle-active { opacity: 1 !important; }
+
+        #fountain-stream { position: absolute; bottom: 10px; right: 8px; width: 300px; height: 30px; border: 6px solid var(--aqua); border-color: var(--aqua) transparent transparent transparent; border-radius: 100% 100% 0 0; opacity: 0; transition: 0.25s; pointer-events: none; z-index: 4; }
+        #fountain-spout { width: 12px; height: 30px; background: #95a5a6; position: absolute; bottom: 5px; right: 5px; border-radius: 3px; transform: rotate(-45deg); z-index: 5; border-right: 2px solid #7f8c8d; }
+
+        .show-flow { opacity: 1 !important; }
+        .qr-box { width: 70px; height: 70px; background: repeating-conic-gradient(#333 0% 25%, #fff 0% 50%) 50% / 10px 10px; border: 2px solid #333; margin: 5px auto; }
+        
+        .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .cash-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        button { padding: 8px; border-radius: 8px; border: none; background: var(--aqua); color: white; font-weight: bold; cursor: pointer; font-size: 11px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        button:disabled { background: #ccc !important; cursor: not-allowed; }
+        button.back { background: #90a4ae; margin-top: auto; align-self: flex-start; padding: 5px 10px; }
+        input { padding: 8px; margin-bottom: 6px; border: 1px solid #b3e5fc; border-radius: 6px; width: 100%; box-sizing: border-box; font-size: 11px; background: rgba(255,255,255,0.9); }
+
+        .form-card { background: rgba(255,255,255,0.95); padding: 15px; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); border: 2px solid var(--aqua); width: 100%; max-width: 280px; margin: 0 auto; }
+        #activation-fee-notice { font-size: 10px; color: var(--danger); font-weight: bold; margin-bottom: 5px; text-align: center; }
+        .sim-coin-btn { background: #fbc02d; color: #333; margin-bottom: 8px; font-size: 10px; width: 100%; }
+        .forgot-link { color: var(--dark-blue); font-size: 10px; text-decoration: underline; cursor: pointer; display: block; margin-top: 10px; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div id="kiosk-setup">
+    <div id="machine-shell">
+        <div id="kiosk-inner">
+            <div id="screen">
+                <div id="overlay"></div>
+                <div id="custom-alert">
+                    <h3 id="alert-title">Notice</h3>
+                    <p id="alert-text"></p>
+                    <div id="alert-buttons">
+                        <button onclick="closeAlert()" style="width: 100%; background: #0277bd;">OK</button>
+                    </div>
+                </div>
+
+                <div id="sidebar">
+                    <h3 style="margin:0; color:white; font-size: 14px;">User Panel</h3>
+                    <div style="background:rgba(255,255,255,0.2); padding:8px; border-radius:8px; margin:8px 0; font-size: 11px;">
+                        <strong id="side-user">Guest</strong><br><small id="side-email">---</small>
+                    </div>
+                    <div style="text-align:center; padding:8px; border:2px solid #4fc3f7; background:rgba(0,0,0,0.3); border-radius:8px;">
+                        <small style="font-size: 9px; color:#e1f5fe;">POINTS</small><br><span style="font-size:18px; font-weight:bold; color:var(--accent);" id="pt-balance">0</span>
+                    </div>
+                    <button style="margin-top:auto; background:var(--danger); font-size: 10px;" onclick="logout()">Logout</button>
+                </div>
+
+                <div id="main-content">
+                    <div id="page-home" class="page active" style="align-items:center; justify-content:center; text-align:center;">
+                        <span class="wavy-title">AQUA SPLASH</span>
+                        <p style="color:var(--dark-blue); font-weight: bold; margin-top: -5px;">Purified Water</p>
+                        <div style="display:flex; gap:10px; margin-top:10px;">
+                            <button style="width:100px; height:40px;" onclick="startQRScan()">QR Login</button>
+                            <button style="width:100px; height:40px; background:#455a64;" onclick="showPage('page-signin')">Sign In</button>
+                        </div>
+                        <button style="margin-top:10px; width:210px; background:var(--accent);" onclick="showPage('page-register')">Activate Account</button>
+                        <button style="margin-top:10px; width:210px; background:var(--steel-mid);" onclick="loginGuest()">Continue as Guest</button>
+                    </div>
+
+                    <div id="page-register" class="page" style="align-items:center; justify-content:center;">
+                        <div class="form-card">
+                            <h2 style="margin-top:0; text-align:center;">Account Setup</h2>
+                            <div id="activation-fee-notice">Fee: ₱10 required</div>
+                            <button class="sim-coin-btn" onclick="addCashHardware('coin', 10, true)">[Test] Insert ₱10 Coin</button>
+                            <input type="text" id="reg-user" placeholder="Username">
+                            <input type="email" id="reg-email" placeholder="Email">
+                            <input type="tel" id="reg-phone" placeholder="Phone Number">
+                            <input type="password" id="reg-pass" placeholder="Password">
+                            <button id="btn-confirm-reg" style="background:var(--accent); margin-top:5px; width:100%;" onclick="register()" disabled>Confirm Activation</button>
+                        </div>
+                        <button class="back" onclick="showPage('page-home')">Back</button>
+                    </div>
+
+                    <div id="page-signin" class="page">
+                        <h2>Sign In</h2>
+                        <div class="form-card">
+                            <input type="text" id="login-user" placeholder="Username">
+                            <input type="password" id="login-pass" placeholder="Password">
+                            <button onclick="login()" style="width:100%; background:var(--dark-blue);">Login</button>
+                            <span class="forgot-link" onclick="showPage('page-forgot')">Forgot Password?</span>
+                        </div>
+                        <button class="back" onclick="showPage('page-home')">Back</button>
+                    </div>
+
+                    <div id="page-forgot" class="page">
+                        <h2>Reset Password</h2>
+                        <div class="form-card">
+                            <p style="font-size: 10px; color: #555; margin-bottom: 10px;">Enter your phone number to verify identity.</p>
+                            <input type="tel" id="forgot-phone" placeholder="Registered Phone Number">
+                            <input type="password" id="forgot-new-pass" placeholder="New Password">
+                            <button onclick="resetPassword()" style="width:100%; background:var(--accent);">Update Password</button>
+                        </div>
+                        <button class="back" onclick="showPage('page-signin')">Back</button>
+                    </div>
+
+                    <div id="page-menu" class="page">
+                        <h2>Dashboard</h2>
+                        <div class="menu-grid">
+                            <button id="btn-profile" style="height:60px; background:var(--dark-blue);" onclick="showProfile()">👤 Profile</button>
+                            <button id="btn-history" style="height:60px; background:var(--dark-blue);" onclick="showHistory()">📜 Transaction History</button>
+                            <button style="height:60px; background:var(--aqua);" onclick="showPage('page-services')">💧 Service Offered</button>
+                            <button style="height:60px; background:var(--accent);" onclick="showPage('page-topup-choices')">₱ Top Up</button>
+                        </div>
+                    </div>
+
+                    <div id="page-profile" class="page">
+                        <h2>My Profile</h2>
+                        <div class="form-card" style="display:flex; gap:10px; color:#333; font-size: 11px; max-width: 100%;">
+                            <div style="flex:2;"><p><strong>User:</strong> <span id="prof-user"></span></p><p><strong>Phone:</strong> <span id="prof-phone"></span></p><button onclick="printReceipt()" style="width:100%; font-size: 10px;">Print QR</button></div>
+                            <div style="flex:1; text-align:center;"><div class="qr-box"></div></div>
+                        </div>
+                        <button class="back" onclick="showPage('page-menu')">Back</button>
+                    </div>
+
+                    <div id="page-topup-choices" class="page">
+                        <h2>Top Up Method</h2>
+                        <div style="display:flex; gap:10px;">
+                            <button style="flex:1; height:80px; background:var(--dark-blue);" onclick="showPage('page-topup-cash')">🪙 Coins & Bills</button>
+                            <button style="flex:1; height:80px; background:#90a4ae;" onclick="showAlert('Unavailable')">💳 Others</button>
+                        </div>
+                        <button class="back" onclick="showPage('page-menu')">Back</button>
+                    </div>
+
+                    <div id="page-topup-cash" class="page">
+                        <h2>Insert Cash</h2>
+                        <div id="cash-buttons" class="cash-grid">
+                            </div>
+                        <button class="back" onclick="showPage('page-topup-choices')">Back</button>
+                    </div>
+
+                    <div id="page-services" class="page">
+                        <h2>Refill Options</h2>
+                        <button style="height:60px; margin-bottom:8px; background:var(--dark-blue);" onclick="selectService('Dispense')">Water Dispenser</button>
+                        <button style="height:60px; background:var(--aqua);" onclick="selectService('Fountain')">Drinking Fountain</button>
+                        <button class="back" onclick="showPage('page-menu')">Back</button>
+                    </div>
+
+                    <div id="page-temp" class="page">
+                        <h2>Water Temperature</h2>
+                        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
+                            <button style="background:#039be5;" onclick="setTemp('Cold')">COLD</button>
+                            <button style="background:#ffb300;" onclick="setTemp('Warm')">WARM</button>
+                            <button style="background:#f4511e;" onclick="setTemp('Hot')">HOT</button>
+                        </div>
+                        <button class="back" onclick="showPage('page-services')">Back</button>
+                    </div>
+
+                    <div id="page-volume" class="page">
+                        <h2 id="vol-title">Volume</h2>
+                        <div id="volume-buttons" class="menu-grid">
+                            </div>
+                        <button class="back" onclick="showPage('page-services')">Back</button>
+                    </div>
+
+                    <div id="page-action" class="page" style="align-items:center; justify-content:center; background: #e3f2fd;">
+                        <h2 id="action-instr" style="font-size: 16px;">Ready...</h2>
+                        <div id="countdown" style="font-size:60px; color:var(--dark-blue); font-weight:bold; text-shadow: 0 4px 10px rgba(0,0,0,0.1);">3</div>
+                    </div>
+
+                    <div id="page-history" class="page">
+                        <h2>Transaction History</h2>
+                        <div id="history-list" style="background:white; flex:1; overflow-y:auto; color:#333; font-size: 10px; border-radius: 8px;"></div>
+                        <button class="back" onclick="showPage('page-menu')">Back</button>
+                    </div>
+
+                    <div id="page-qr-scan" class="page" style="align-items:center; justify-content:center; background: #000;">
+                        <div style="width:120px; height:120px; border:4px solid var(--aqua); position:relative; background:#111;">
+                            <div style="position:absolute; width:100%; height:4px; background:var(--laser); animation:scan 2s infinite linear; box-shadow: 0 0 10px var(--laser);"></div>
+                        </div>
+                        <p style="color:white; margin-top:20px;">Scanning...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="hardware-row">
+            <div class="slot-container"><div id="coin-phys" class="money-anim"></div><div style="width:20px; height:4px; background:#000;"></div><div class="slot-label">COIN</div></div>
+            <div class="slot-container"><div id="bill-phys" class="bill-anim"></div><div style="width:50px; height:8px; background:#000;"></div><div class="slot-label">BILL</div></div>
+            <div class="slot-container" style="overflow:hidden;"><div id="qr-hand"><div style="width:30px; height:30px; background: repeating-conic-gradient(#333 0% 25%, #fff 0% 50%) 50% / 6px 6px;"></div></div><div style="width:40px; height:30px; border:2px solid var(--aqua); background:#111;"></div><div class="slot-label">SCAN</div></div>
+            <div class="slot-container"><div id="receipt-paper">QR</div><div style="width:50px; height:3px; background:#000;"></div><div class="slot-label">PRINT</div></div>
+        </div>
+
+        <div id="dispensing-bay">
+            <div id="nozzle-center"></div>
+            <div id="vertical-stream"></div>
+            <div id="bottle"></div>
+            <div id="fountain-stream"></div>
+            <div id="drain-hole"></div>
+            <div id="fountain-spout"></div>
+        </div>
+    </div>
+    <div id="machine-base"></div>
+</div>
+
+<script>
+    let user = { username: "Guest", email: "---", phone: "---", points: 0, password: "", isGuest: false };
+    let historyData = [];
+    let currentService = "";
+    let selectedDispense = { ml: 0, cost: 0 };
+
+    const pricing = {
+        registered: [
+            { ml: 100, cost: 1 },
+            { ml: 250, cost: 2 },
+            { ml: 500, cost: 4 },
+            { ml: 1000, cost: 8 }
+        ],
+        guest: [
+            { ml: 100, cost: 1 },
+            { ml: 250, cost: 3 },
+            { ml: 500, cost: 5 },
+            { ml: 1000, cost: 10 }
+        ]
+    };
+
+    const registeredRates = { 1: 1, 5: 6, 10: 13, 20: 25, 50: 60, 100: 115 };
+    const cashValues = [1, 5, 10, 20, 50, 100];
+
+    function showPage(id) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        const hideSidebar = ['page-home','page-register','page-signin','page-qr-scan','page-action', 'page-forgot'];
+        document.getElementById('sidebar').style.display = hideSidebar.includes(id) ? 'none' : 'flex';
+        
+        if(id === 'page-volume') renderVolumeButtons();
+        if(id === 'page-topup-cash') renderCashButtons();
+        if(id === 'page-register') checkActivationEligibility();
+    }
+
+    function renderVolumeButtons() {
+        const container = document.getElementById('volume-buttons');
+        container.innerHTML = "";
+        const currentPricing = user.isGuest ? pricing.guest : pricing.registered;
+        currentPricing.forEach(item => {
+            const btn = document.createElement('button');
+            btn.innerText = `${item.ml}ml (${item.cost}pts)`;
+            btn.onclick = () => confirmDispense(item.ml, item.cost);
+            container.appendChild(btn);
+        });
+    }
+
+    function renderCashButtons() {
+        const container = document.getElementById('cash-buttons');
+        container.innerHTML = "";
+        cashValues.forEach(val => {
+            const pts = user.isGuest ? val : registeredRates[val];
+            const btn = document.createElement('button');
+            const type = val >= 20 ? 'bill' : 'coin';
+            btn.innerText = `₱${val} (+${pts} pt${pts !== 1 ? 's' : ''})`;
+            btn.onclick = () => addCashHardware(type, val);
+            container.appendChild(btn);
+        });
+    }
+
+    function addCashHardware(type, amount, isActivation = false) {
+        const el = document.getElementById(type + '-phys');
+        el.classList.add('active-money');
+        setTimeout(() => {
+            el.classList.remove('active-money');
+            let addedPoints = 0;
+            if (isActivation) {
+                addedPoints = (amount / 10);
+            } else {
+                addedPoints = user.isGuest ? amount : registeredRates[amount];
+            }
+            user.points += addedPoints;
+            historyData.unshift({ desc: `₱${amount}`, pts: `+${addedPoints}`, color: 'var(--accent)' });
+            updateUI();
+            if(document.getElementById('page-register').classList.contains('active')) checkActivationEligibility();
+        }, 600);
+    }
+
+    function checkActivationEligibility() {
+        const btn = document.getElementById('btn-confirm-reg');
+        const notice = document.getElementById('activation-fee-notice');
+        let cashInserted = (user.points * 10).toFixed(0); 
+        if(cashInserted >= 10) {
+            btn.disabled = false;
+            notice.innerText = "Payment Received! (₱" + cashInserted + ")";
+            notice.style.color = "var(--accent)";
+        } else {
+            btn.disabled = true;
+            notice.innerText = "Fee: ₱10 required. (Inserted: ₱" + cashInserted + ")";
+            notice.style.color = "var(--danger)";
+        }
+    }
+
+    function register() {
+        if((user.points * 10) < 10) return;
+        user.points -= 1;
+        historyData.unshift({ desc: `Activation Fee`, pts: `-1`, color: 'var(--danger)' });
+        user.points += 10;
+        historyData.unshift({ desc: `Welcome Bonus`, pts: `+10`, color: 'var(--accent)' });
+        user.username = document.getElementById('reg-user').value || "User";
+        user.phone = document.getElementById('reg-phone').value || "---";
+        user.password = document.getElementById('reg-pass').value || "";
+        user.isGuest = false;
+        localStorage.setItem('aquaAccount_' + user.username, JSON.stringify(user));
+        showAlert("Success! Account Created.");
+        updateUI();
+        showPage('page-home');
+    }
+
+    function loginGuest() {
+        user = { username: "Guest User", email: "Guest Access", phone: "N/A", points: 0, password: "", isGuest: true };
+        document.getElementById('btn-profile').style.display = 'none';
+        document.getElementById('btn-history').style.display = 'none';
+        updateUI();
+        showPage('page-menu');
+    }
+
+    function login() { 
+        const u = document.getElementById('login-user').value;
+        const p = document.getElementById('login-pass').value;
+        const stored = localStorage.getItem('aquaAccount_' + u);
+        if(stored) {
+            const parsed = JSON.parse(stored);
+            if(parsed.password === p) {
+                user = parsed;
+                user.isGuest = false;
+                document.getElementById('btn-profile').style.display = 'block';
+                document.getElementById('btn-history').style.display = 'block';
+                updateUI(); 
+                showPage('page-menu');
+                return;
+            }
+        }
+        showAlert("Invalid username or password.");
+    }
+
+    function logout() { 
+        user = { username: "Guest", email: "---", phone: "---", points: 0, password: "", isGuest: false };
+        historyData = []; 
+        document.getElementById('btn-profile').style.display = 'block';
+        document.getElementById('btn-history').style.display = 'block';
+        updateUI(); 
+        showPage('page-home'); 
+    }
+
+    function updateUI() {
+        document.getElementById('pt-balance').innerText = user.points;
+        document.getElementById('side-user').innerText = user.username;
+        document.getElementById('prof-user').innerText = user.username;
+        document.getElementById('prof-phone').innerText = user.phone;
+    }
+
+    function confirmDispense(ml, cost) {
+        if(user.points < cost) { showAlert("Insufficient Points"); return; }
+        selectedDispense = { ml, cost };
+        document.getElementById('alert-title').innerText = "Confirm Order";
+        document.getElementById('alert-text').innerText = `Dispense ${ml}ml for ${cost} points?`;
+        const btnArea = document.getElementById('alert-buttons');
+        btnArea.innerHTML = `<div style="display:flex; gap:10px;"><button onclick="closeAlert()" style="flex:1; background:var(--danger);">Cancel</button><button onclick="executeDispense()" style="flex:1; background:var(--accent);">Confirm</button></div>`;
+        document.getElementById('overlay').style.display = 'block';
+        document.getElementById('custom-alert').style.display = 'block';
+    }
+
+    function executeDispense() {
+        closeAlert();
+        const { ml, cost } = selectedDispense;
+        user.points -= cost;
+        historyData.unshift({ desc: `${ml}ml`, pts: `-${cost}`, color: 'var(--danger)' });
+        updateUI();
+        showPage('page-action');
+        document.getElementById('action-instr').innerText = (currentService === 'Dispense') ? "Place bottle..." : "Get ready...";
+        let count = 3;
+        document.getElementById('countdown').innerText = count;
+        let clock = setInterval(() => {
+            count--;
+            document.getElementById('countdown').innerText = count;
+            if(count === 0) { clearInterval(clock); startWaterFlow(); }
+        }, 1000);
+    }
+
+    function startWaterFlow() {
+        document.getElementById('action-instr').innerText = "Filling...";
+        if(currentService === 'Dispense') {
+            document.getElementById('bottle').classList.add('bottle-active');
+            document.getElementById('vertical-stream').classList.add('show-flow');
+            setTimeout(() => document.getElementById('bottle').classList.add('bottle-full'), 100);
+        } else {
+            document.getElementById('fountain-stream').classList.add('show-flow');
+        }
+        setTimeout(() => {
+            document.getElementById('vertical-stream').classList.remove('show-flow');
+            document.getElementById('fountain-stream').classList.remove('show-flow');
+            document.getElementById('bottle').classList.remove('bottle-active', 'bottle-full');
+            showAlert("Complete!");
+            showPage('page-menu');
+        }, 3000);
+    }
+
+    function selectService(type) {
+        currentService = type;
+        if(type === 'Dispense') showPage('page-temp');
+        else { document.getElementById('vol-title').innerText = "Fountain Vol"; showPage('page-volume'); }
+    }
+
+    function setTemp(t) { document.getElementById('vol-title').innerText = t + " Volume"; showPage('page-volume'); }
+    function showProfile() { updateUI(); showPage('page-profile'); }
+    function showHistory() {
+        const list = document.getElementById('history-list');
+        list.innerHTML = historyData.length === 0 ? "<p style='text-align:center'>No transactions yet.</p>" :
+            historyData.map(h => `<div style="padding:8px; border-bottom:1px solid #e1f5fe; display:flex; justify-content:space-between;"><span>${h.desc}</span><strong style="color:${h.color}">${h.pts}</strong></div>`).join('');
+        showPage('page-history');
+    }
+
+    function showAlert(text) {
+        document.getElementById('alert-title').innerText = "Notice";
+        document.getElementById('alert-text').innerText = text;
+        document.getElementById('alert-buttons').innerHTML = `<button onclick="closeAlert()" style="width: 100%; background: #0277bd;">OK</button>`;
+        document.getElementById('overlay').style.display = 'block';
+        document.getElementById('custom-alert').style.display = 'block';
+    }
+
+    function closeAlert() {
+        document.getElementById('overlay').style.display = 'none';
+        document.getElementById('custom-alert').style.display = 'none';
+    }
+    
+    function resetPassword() {
+        const phone = document.getElementById('forgot-phone').value;
+        const newPass = document.getElementById('forgot-new-pass').value;
+        let found = false;
+        for (let i = 0; i < localStorage.length; i++){
+            let key = localStorage.key(i);
+            if(key.startsWith('aquaAccount_')) {
+                let data = JSON.parse(localStorage.getItem(key));
+                if(data.phone === phone) {
+                    data.password = newPass;
+                    localStorage.setItem(key, JSON.stringify(data));
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if(found) { showAlert("Password updated!"); showPage('page-signin'); }
+        else { showAlert("Phone number not found."); }
+    }
+
+    function startQRScan() {
+        showPage('page-qr-scan');
+        document.getElementById('qr-hand').style.bottom = "10px";
+        setTimeout(() => { 
+            document.getElementById('qr-hand').style.bottom = "-150px"; 
+            for (let i = 0; i < localStorage.length; i++){
+                let key = localStorage.key(i);
+                if(key.startsWith('aquaAccount_')) {
+                    user = JSON.parse(localStorage.getItem(key));
+                    user.isGuest = false;
+                    updateUI();
+                    showPage('page-menu');
+                    return;
+                }
+            }
+            showAlert("No account found.");
+            showPage('page-home');
+        }, 2000);
+    }
+
+    function printReceipt() {
+        const paper = document.getElementById('receipt-paper');
+        paper.style.height = "50px";
+        setTimeout(() => { showAlert("QR Printed"); paper.style.height = "0"; }, 2500);
+    }
+</script>
+</body>
+</html>
+
