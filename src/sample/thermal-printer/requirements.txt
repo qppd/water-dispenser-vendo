@@ -1,0 +1,4 @@
+# Core dependencies
+pyserial>=3.5
+python-escpos>=3.0
+qrcode[pil]>=7.3
