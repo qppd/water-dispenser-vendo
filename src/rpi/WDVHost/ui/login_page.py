@@ -1,7 +1,3 @@
-"""
-ui/login_page.py - Username / password sign-in (page-signin).
-"""
-
 import customtkinter as ctk
 from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, BTN_WIDE, PAD

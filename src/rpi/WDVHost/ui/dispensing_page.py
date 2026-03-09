@@ -1,12 +1,3 @@
-"""
-ui/dispensing_page.py - Countdown + dispensing flow (page-action).
-
-Flow:
-  1. Show countdown  3 → 2 → 1
-  2. Show "Dispensing…" with a progress bar that fills over the dispense duration
-  3. On completion (timer OR hardware dispense_complete event) → show summary
-"""
-
 from __future__ import annotations
 from typing import Optional
 

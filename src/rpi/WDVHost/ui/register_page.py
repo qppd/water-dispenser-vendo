@@ -1,11 +1,3 @@
-"""
-ui/register_page.py - Account activation / registration (page-register).
-
-Requires ₱10 coin inserted via the hardware slot before the confirm
-button becomes active.  Inserts are simulated with a test button during
-development.
-"""
-
 import customtkinter as ctk
 from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, BTN_WIDE, PAD

@@ -1,11 +1,3 @@
-"""
-hardware_hooks.py - Clean API for all hardware actions.
-
-Every UI page calls these functions instead of directly touching
-SerialManager.  This makes swapping the transport layer easy and keeps
-pages testable without real hardware.
-"""
-
 from __future__ import annotations
 from typing import TYPE_CHECKING
 

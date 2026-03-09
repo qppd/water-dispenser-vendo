@@ -1,14 +1,3 @@
-"""
-ui/qr_scan_page.py - QR scanner animation + login (page-qr-scan).
-
-In real hardware, a USB HID keyboard-mode QR scanner emits keystrokes
-captured by QRScanner → puts a QR_SCANNED event on the hw_event_queue
-→ dispatched here via the AppState callback.
-
-In simulation mode (--sim, or no scanner), the first stored account
-is loaded after a 4 s timeout — mirroring the HTML simulation behaviour.
-"""
-
 from __future__ import annotations
 from typing import Optional
 

@@ -1,11 +1,3 @@
-"""
-storage.py - JSON-file persistence layer (replaces HTML localStorage).
-
-Accounts are stored as individual JSON files under a local 'accounts/'
-folder relative to this module.  The format mirrors the User dataclass
-so serialisation/deserialisation is trivial.
-"""
-
 import json
 import os
 from typing import Optional, List

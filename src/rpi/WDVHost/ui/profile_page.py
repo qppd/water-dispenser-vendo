@@ -1,7 +1,3 @@
-"""
-ui/profile_page.py - Shows user info and QR print button (page-profile).
-"""
-
 import customtkinter as ctk
 from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, PAD
@@ -110,8 +106,6 @@ class ProfilePage(BasePage):
         pil_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
         pil_img = pil_img.resize((110, 110), PILImage.LANCZOS)
 
-        # Must keep a reference on self — CTkLabel does not hold one internally,
-        # so a local variable would be garbage-collected immediately.
         self._qr_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(110, 110))
         self._qr_label.configure(image=self._qr_img, text="")
 

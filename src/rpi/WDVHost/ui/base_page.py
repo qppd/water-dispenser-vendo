@@ -1,11 +1,3 @@
-"""
-ui/base_page.py - Abstract base class shared by every kiosk page.
-
-Subclasses must implement build() which is called once during __init__.
-Each page receives a reference to the parent Tk frame/container, the
-shared AppState, and the "controller" (MainApp) that exposes show_page().
-"""
-
 from __future__ import annotations
 
 import customtkinter as ctk
@@ -18,33 +10,17 @@ if TYPE_CHECKING:
 
 
 class BasePage(ctk.CTkFrame):
-    """
-    Base page frame.
-
-    Parameters
-    ----------
-    parent:     The container frame managed by MainApp.
-    app_state:  Shared AppState instance.
-    controller: MainApp instance — call controller.show_page(name) to navigate.
-    """
-
     def __init__(self, parent, app_state: "AppState", controller) -> None:
         super().__init__(parent, fg_color=C["screen_bg"], corner_radius=0)
         self.app_state  = app_state
         self.controller = controller
         self.build()
 
-    # ── Subclasses override this ───────────────────────────────────────────────
-
     def build(self) -> None:
         raise NotImplementedError
 
-    # ── Lifecycle hook called by MainApp when this page becomes visible ────────
-
     def on_show(self) -> None:
         """Override in subclass to refresh dynamic content each time shown."""
-
-    # ── Convenience widget factories ──────────────────────────────────────────
 
     def make_button(
         self,
@@ -118,8 +94,6 @@ class BasePage(ctk.CTkFrame):
             height=40,
             font=F["small"],
         )
-
-    # ── Internal helpers ──────────────────────────────────────────────────────
 
     @staticmethod
     def _darken(hex_color: str) -> str:

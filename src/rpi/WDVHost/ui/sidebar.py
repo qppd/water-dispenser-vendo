@@ -1,10 +1,3 @@
-"""
-ui/sidebar.py - Persistent left-hand panel visible after login.
-
-Displays: user name · points balance · logout button.
-MainApp calls sidebar.refresh() whenever user state changes.
-"""
-
 from __future__ import annotations
 
 import customtkinter as ctk

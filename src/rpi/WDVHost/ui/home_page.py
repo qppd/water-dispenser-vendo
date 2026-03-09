@@ -1,9 +1,3 @@
-"""
-ui/home_page.py - Landing page (equivalent to HTML page-home).
-
-Buttons: QR Login · Sign In · Activate Account · Continue as Guest
-"""
-
 import customtkinter as ctk
 from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, BTN_WIDE, PAD

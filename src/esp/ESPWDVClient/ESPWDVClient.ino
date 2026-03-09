@@ -3,9 +3,6 @@
 #include "BUZZER_CONFIG.h"
 #include "RELAY_CONFIG.h"
 
-// ── Non-blocking relay state ──────────────────────────────────────────────────
-// The RPi owns all dispensing decisions.  The ESP32 only executes the relay
-// for the requested duration and reports completion.
 static unsigned long relayOpenTime  = 0;  // millis() when relay was opened
 static unsigned long relayDurationMs = 0; // requested hold duration
 static bool          relayActive    = false;
@@ -78,11 +75,10 @@ void loop()
     }
 
     // ── 3. Coin pulse aggregation ─────────────────────────────────────────────
-    // Collect all pulses for one coin and report once 250ms after the last pulse
     if (coinInserted && (millis() - lastCoinPulseTime > 250)) {
         int coinValue = getCoinValue();
         if (coinValue > 0) {
-            coinCredit += coinValue; // Local running total for debug output only
+            coinCredit += coinValue;
             playTone(1200, 300);
             Serial.print("Coin accepted: P");
             Serial.print(coinValue);
@@ -97,7 +93,7 @@ void loop()
     if (billInserted && (millis() - lastPulseTime > 250)) {
         int billValue = getBillValue();
         if (billValue > 0) {
-            billCredit += billValue; // Local running total for debug output only
+            billCredit += billValue; 
             playTone(1200, 300);
             Serial.print("Bill accepted: P");
             Serial.print(billValue);

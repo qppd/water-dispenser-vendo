@@ -1,10 +1,3 @@
-"""
-ui/theme.py - Shared visual constants for the kiosk UI.
-
-All pages import from here so a colour/font change needs editing
-exactly one file.
-"""
-
 # ── Colour palette (matches HTML simulation) ──────────────────────────────────
 C = {
     "aqua":       "#00a8ff",

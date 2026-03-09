@@ -1,11 +1,3 @@
-"""
-ui/volume_page.py - Volume selection with per-user pricing (page-volume).
-
-Renders buttons dynamically based on whether the user is a guest or
-registered account.  Shows points balance and cost per option so the
-user can make an informed choice.
-"""
-
 import customtkinter as ctk
 from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, PAD

@@ -1,10 +1,3 @@
-"""
-ui/services_page.py - Choose water service type (page-services).
-
-Water Dispenser → goes to temperature selection
-Drinking Fountain → goes straight to volume selection
-"""
-
 import customtkinter as ctk
 from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, PAD

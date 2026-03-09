@@ -1,30 +1,3 @@
-"""
-qr_scanner.py - Background USB QR scanner listener (HID keyboard mode).
-
-USB QR scanners in HID keyboard mode type the scanned string as keyboard
-input and terminate with Enter (newline).  This module:
-
-1.  Binds to the Tkinter root window's key events (works cross-platform).
-2.  Buffers incoming characters on a per-scan basis.
-3.  Uses a background monitor thread to discard stale / partial input
-    (distinguishes rapid scanner input from slow manual typing).
-4.  On Enter, emits a ``QR_SCANNED`` event onto the shared
-    ``AppState.hw_event_queue`` for the main-thread poller to dispatch.
-
-Event format::
-
-    {"type": "QR_SCANNED", "data": "<scanned string>"}
-
-Threading
----------
-- Keyboard capture happens via Tk event callbacks (main thread) — this is
-  the correct way to receive HID keyboard input in a GUI application.
-- A lightweight daemon *monitor* thread runs in the background to expire
-  stale buffers (satisfies the threading.Thread requirement).
-
-Cross-platform: Windows + Raspberry Pi (Debian Trixie ARM64).
-"""
-
 import threading
 import queue
 import time
@@ -32,19 +5,6 @@ from typing import Optional
 
 
 class QRScanner:
-    """
-    Listens for QR code input from a USB HID keyboard-mode scanner.
-
-    Parameters
-    ----------
-    event_queue : queue.Queue
-        The shared ``AppState.hw_event_queue``.  ``QR_SCANNED`` events are
-        placed here for the Tk main-thread poller to consume.
-    """
-
-    # A USB HID scanner emits characters at sub-millisecond intervals.
-    # Manual keyboard typing is >> 100 ms per character.  A generous
-    # threshold of 300 ms separates the two use cases.
     _SCAN_TIMEOUT_S: float = 0.3
 
     # How often the background monitor thread checks for stale buffers.

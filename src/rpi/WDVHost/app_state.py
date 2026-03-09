@@ -1,11 +1,3 @@
-"""
-app_state.py - Shared application state for the WDV kiosk.
-
-The AppState singleton is passed to every UI page so they share the same
-user session, transaction history, pending service selection, and hardware
-event queue without any globals.
-"""
-
 import queue
 from dataclasses import dataclass, field
 from typing import List, Optional, Callable

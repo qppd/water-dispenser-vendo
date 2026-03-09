@@ -1,7 +1,3 @@
-"""
-ui/temperature_page.py - Water temperature selection (page-temp).
-"""
-
 import customtkinter as ctk
 from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, PAD

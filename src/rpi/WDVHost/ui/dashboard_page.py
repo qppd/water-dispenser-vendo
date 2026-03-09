@@ -1,9 +1,3 @@
-"""
-ui/dashboard_page.py - Main menu shown after login (page-menu).
-
-Four large tiles: Profile · History · Services · Top-Up
-"""
-
 import customtkinter as ctk
 from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, PAD

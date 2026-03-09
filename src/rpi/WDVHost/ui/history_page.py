@@ -1,7 +1,3 @@
-"""
-ui/history_page.py - Scrollable transaction log (page-history).
-"""
-
 import customtkinter as ctk
 from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, PAD

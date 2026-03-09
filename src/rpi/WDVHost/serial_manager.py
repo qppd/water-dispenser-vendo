@@ -1,21 +1,3 @@
-"""
-serial_manager.py - Non-blocking serial interface to the ESP32.
-
-Runs a daemon reader thread that parses ESP32 plain-text messages and
-puts structured events onto AppState.hw_event_queue for the Tkinter main
-thread to drain via after().
-
-Supported inbound messages (existing ESP32 firmware):
-    "Coin accepted: P{value} | ..."
-    "Bill accepted: P{value} | ..."
-    "Dispensed water"
-
-Outbound commands (ESP32 firmware extension – CMD: prefix):
-    CMD:DISPENSE:{duration_ms}
-    CMD:FOUNTAIN:{duration_ms}
-    CMD:STOP
-"""
-
 import threading
 import queue
 import re
