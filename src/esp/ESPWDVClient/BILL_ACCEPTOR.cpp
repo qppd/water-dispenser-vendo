@@ -4,22 +4,52 @@ volatile unsigned int pulseCount = 0;
 unsigned int billCredit = 0;
 unsigned long lastPulseTime = 0;
 const unsigned long pulseDebounce = 70; // ms debounce (TB-74 pulses are 100ms apart)
-volatile int detectedBillValue = 0; // Current detected bill value
+volatile int detectedBillValue = 0;  // Current detected bill value
+volatile bool billInserted = false;  // True once first pulse of a bill is received
+volatile bool billEnabled = true;    // enabled by default
 
 void IRAM_ATTR billPulseISR() {
+  if (!billEnabled) return; // ignore pulses when disabled
   unsigned long currentTime = millis();
   if (currentTime - lastPulseTime > pulseDebounce) {
     pulseCount++;
+    billInserted = true;       // Flag that a bill pulse has been received
     lastPulseTime = currentTime;
   }
 }
 
 void initBILLACCEPTOR() {
   pinMode(billPin, INPUT_PULLUP);
+  pinMode(billEnablePin, OUTPUT);
+  digitalWrite(billEnablePin, HIGH); // enabled by default
   attachInterrupt(digitalPinToInterrupt(billPin), billPulseISR, FALLING);
   Serial.println("TB-74 Bill Acceptor initialized");
   Serial.println("Accepts: P20, P50, and P100 bills");
   Serial.println("Pulse protocol: 1 pulse = P10 value");
+}
+
+// Enable bill acceptor: raise the enable pin and allow ISR processing
+void enableBill() {
+  billEnabled = true;
+  digitalWrite(billEnablePin, HIGH);
+  Serial.println("Bill enabled");
+}
+
+// Disable bill acceptor: pull enable pin low and block ISR processing
+void disableBill() {
+  billEnabled = false;
+  digitalWrite(billEnablePin, LOW);
+  Serial.println("Bill disabled");
+}
+
+bool isBillEnabled() {
+  return billEnabled;
+}
+
+// Reset bill detection variables (mirrors resetCoinDetection())
+void resetBillDetection() {
+  pulseCount = 0;
+  billInserted = false;
 }
 
 // Determine bill value based on pulse count

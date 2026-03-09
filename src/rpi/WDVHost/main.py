@@ -100,7 +100,7 @@ class MainApp(ctk.CTk):
         self.app_state = AppState()
 
         # ── Serial manager ────────────────────────────────────────────────────
-        port = None if simulation_mode else SerialManager.find_port()
+        port = "COM7" if not simulation_mode else None
         self.serial_mgr = SerialManager(
             event_queue=self.app_state.hw_event_queue,
             port=port,

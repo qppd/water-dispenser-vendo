@@ -1,11 +1,3 @@
-"""
-ui/topup_cash_page.py - Insert cash denominations to add points (page-topup-cash).
-
-Hardware: physical coin/bill events arrive via SerialManager and are routed
-through AppState callbacks.  The test buttons on-screen invoke the same
-simulate_* methods so development without hardware remains easy.
-"""
-
 import customtkinter as ctk
 from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, PAD
@@ -99,6 +91,3 @@ class TopupCashPage(BasePage):
             hardware_hooks.insert_bill(value, self.controller.serial_mgr)
         else:
             hardware_hooks.insert_coin(value, self.controller.serial_mgr)
-        # The actual point crediting happens when the hw event comes back
-        # through the queue → _on_hw_insert.  In simulation mode the simulate_*
-        # methods put the event directly, so the flow is identical.

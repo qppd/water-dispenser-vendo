@@ -149,6 +149,24 @@ class SerialManager:
         """Emergency stop – close all relays."""
         self.send_command("CMD:STOP")
 
+    # ── Enable / Disable controls ─────────────────────────────────────────────
+
+    def enable_coin(self) -> None:
+        """Tell ESP32 to enable coin slot processing."""
+        self.send_command("ENABLE COIN")
+
+    def disable_coin(self) -> None:
+        """Tell ESP32 to disable coin slot processing."""
+        self.send_command("DISABLE COIN")
+
+    def enable_bill(self) -> None:
+        """Tell ESP32 to enable bill acceptor processing."""
+        self.send_command("ENABLE BILL")
+
+    def disable_bill(self) -> None:
+        """Tell ESP32 to disable bill acceptor processing."""
+        self.send_command("DISABLE BILL")
+
     # ── Simulation helpers (for testing without hardware) ─────────────────────
 
     def simulate_coin(self, value: int) -> None:

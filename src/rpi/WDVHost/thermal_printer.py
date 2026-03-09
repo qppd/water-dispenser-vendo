@@ -1,22 +1,3 @@
-"""
-thermal_printer.py - Thermal receipt printer module for the WDV kiosk.
-
-Wraps ESC/POS command building and transport for the POS-5805DD (58 mm)
-USB thermal printer.  Adapted from the tested sample code in
-``src/sample/thermal-printer/``.
-
-Connection types
-----------------
-- **Serial** (COM / /dev/ttyUSB*): uses pyserial.
-- **USB device** (/dev/usb/lp*): direct file I/O.
-
-All public ``print_*()`` methods dispatch the actual I/O to a background
-daemon thread so the GUI never blocks.
-
-Cross-platform: Windows (COMx) + Raspberry Pi Debian Trixie ARM64
-(/dev/usb/lp*, /dev/ttyUSB*).
-"""
-
 import glob
 import logging
 import os

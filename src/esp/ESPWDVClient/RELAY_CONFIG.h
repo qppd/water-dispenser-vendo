@@ -7,5 +7,6 @@
 void initRELAY();
 void operateRELAY(uint16_t RELAY, boolean OPENED);
 void operateSSR(uint16_t RELAY, boolean OPENED);
+void stopAllRelays(); // Close every relay/SSR immediately
 
 #endif // RELAY_CONFIG_H

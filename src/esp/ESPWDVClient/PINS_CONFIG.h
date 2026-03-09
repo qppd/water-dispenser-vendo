@@ -2,14 +2,17 @@
 #define PIN_CONFIGURATION_H
 
 // Coin Slot
-#define coinPin 4
+#define coinPin        33
+#define coinEnablePin  12  // HIGH = enabled, LOW = disabled
 
 // Bill Acceptor
-#define billPin 26
+#define billPin        26
+#define billEnablePin  27  // HIGH = enabled, LOW = disabled
 
 // Piezo Buzzer
-#define BUZZER_PIN 27
+#define BUZZER_PIN 23
 
-#define RELAY_1 23
+#define RELAY_1 19   // Bottle dispense relay
+#define RELAY_2 18   // Fountain relay
 
 #endif // PIN_CONFIGURATION_H
