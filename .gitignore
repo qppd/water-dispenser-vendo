@@ -1,0 +1,26 @@
+# Ignore Python virtual environments
+.venv/
+venv/
+
+# Ignore pycache
+__pycache__/
+
+# Ignore logs and temp files
+*.log
+*.tmp
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore compiled Python files
+*.pyc
+
+# Ignore Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore any local config or secrets
+config_local.py
+
+# Ignore thermal printer output files (if any)
+src/sample/thermal-printer/output/

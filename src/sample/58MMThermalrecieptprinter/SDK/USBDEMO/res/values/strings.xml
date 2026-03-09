@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">PrintDemo</string>
+    <string name="btn_conn">Connect USB Printer</string>
+    <string name="btnSend">Print</string>
+    <string name="btn_test">Print  Test  Page</string>
+    <string name="btnClose">Close</string>
+    <string name="txt_content">&quot;&quot;</string>
+    <string name="menu_settings">set</string>
+    <string name="strLang">en</string>
+    <string name="msg_getpermission">obtaining USB device access permissions success</string>
+    <string name="msg_conn_state">USB device can not access, please re-connect</string>
+
+</resources>

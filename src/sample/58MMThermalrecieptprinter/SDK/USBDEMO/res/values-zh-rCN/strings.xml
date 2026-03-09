@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">PrintDemo</string>
+    <string name="btn_conn">连接USB打印机</string>
+    <string name="btnSend">打印</string>
+    <string name="btn_test">打印测试页</string>
+    <string name="btnClose">关闭</string>
+    <string name="txt_content">&quot;&quot;</string>
+    <string name="menu_settings">设置</string>
+    <string name="strLang">ch</string>
+    <string name="msg_getpermission">已获取USB设备访问权限</string>
+    <string name="msg_conn_state">无USB设备访问权限,请重新连接USB设备</string>
+
+</resources>
