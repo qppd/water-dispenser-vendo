@@ -270,6 +270,7 @@ Dispensed water
 
 ## Wiring Diagram
 
+
 Refer to the `wiring/` directory for detailed wiring diagrams.
 
 ![Water Dispenser Wiring Diagram](wiring/Water_Dispenser_Vendo.png)
@@ -285,7 +286,15 @@ Refer to the `wiring/` directory for detailed wiring diagrams.
 
 ## Hardware Models
 
+
 The project includes 3D models and CAD files for custom hardware components. These can be found in the `models/` directory.
+
+### 3D Model Images
+
+<div align="center">
+<img src="models/Water_Dispenser_Vendo_1.png" alt="3D Model 1" width="350"/>
+<img src="models/Water_Dispenser_Vendo_2.png" alt="3D Model 2" width="350"/>
+</div>
 
 ### Available Models
 - **Enclosure Design**: 3D printable case for the vending machine
