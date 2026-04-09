@@ -12,7 +12,4 @@
 // Piezo Buzzer
 #define BUZZER_PIN 23
 
-#define RELAY_1 19   // Bottle dispense relay
-#define RELAY_2 18   // Fountain relay
-
 #endif // PIN_CONFIGURATION_H
