@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background-color: #e1f5fe; /* screen-bg from RPi theme */
+  color: #1a2744; /* text_dark / app-bg from RPi theme */
+}

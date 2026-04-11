@@ -2,7 +2,8 @@ import customtkinter as ctk
 from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, BTN_WIDE, PAD
 from app_state import User
-from firebase_config import fb_auth, admin_db, username_to_auth_email
+from firebase_config import fb_auth
+import storage
 
 
 class LoginPage(BasePage):
@@ -65,20 +66,24 @@ class LoginPage(BasePage):
             self.controller.show_alert("Login Failed", "Please enter username and password.")
             return
 
-        auth_email = username_to_auth_email(username)
         try:
-            # ── Step 1: Authenticate via Firebase Auth ────────────────────────
-            result = fb_auth.sign_in_with_email_and_password(auth_email, password)
-            uid    = result["localId"]
+            # ── Step 1: Look up username → get real email from RTDB ───────────
+            data = storage.load_user(username)
+            if not data:
+                self.controller.show_alert("Not Found", "No account with that username.")
+                return
 
-            # ── Step 2: Load user profile from RTDB ───────────────────────────
-            data = admin_db.reference(f"users/{uid}").get()
-            if data is None:
+            email = data.get("email", "")
+            if not email or email == "---" or "@" not in email:
                 self.controller.show_alert(
-                    "Account Not Found",
-                    "Authentication succeeded but no kiosk account linked to this username.",
+                    "Login Failed",
+                    "No email linked to this account. Contact support.",
                 )
                 return
+
+            # ── Step 2: Authenticate via Firebase Auth with real email ─────────
+            result = fb_auth.sign_in_with_email_and_password(email, password)
+            uid    = result["localId"]
 
             data["uid"] = uid
             user = User.from_dict(data)

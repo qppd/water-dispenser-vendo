@@ -3,8 +3,8 @@ firebase_config.py — Firebase client singletons for AquaSmart Kiosk.
 
 Two clients are initialised here:
 
-  fb_auth  — pyrebase4 auth client (user-facing sign-in / sign-up)
-  admin_db — firebase-admin RTDB client (admin-level reads + writes)
+  fb_auth    — pyrebase4 auth client (user-facing sign-in / sign-up)
+  admin_db   — firebase-admin RTDB client (admin-level reads + writes)
   admin_auth — firebase-admin Auth client (password resets, custom tokens)
 
 Setup
@@ -18,20 +18,17 @@ RTDB Layout
 -----------
 /users/{uid}
     username  : str
-    email     : str   (user's real contact email; may be "---")
+    email     : str   (user's real Gmail / contact email — used for Firebase Auth)
     phone     : str
     points    : int
     is_guest  : bool
 
 /usernames/{sanitised_username} : uid   ← fast username → uid reverse index
 
-Firebase Auth Email Convention
--------------------------------
-All kiosk accounts use the internal email format:
-    {sanitised_lowercase_username}@wdv.app
-
-This keeps login consistent across the kiosk and the web dashboard.
-The user's real email (e.g. gmail) is stored in RTDB for display only.
+Firebase Auth Email
+-------------------
+The user's REAL email (e.g. gmail) is used directly as the Firebase Auth email.
+This is the same credential used on the web dashboard — no conversion needed.
 """
 
 import os
@@ -45,6 +42,7 @@ from firebase_admin import credentials, auth as _fb_admin_auth, db as _fb_admin_
 # Fill values directly OR export them as environment variables before starting.
 
 FIREBASE_CONFIG: dict = {
+<<<<<<< HEAD
     "apiKey":            os.environ.get("FIREBASE_API_KEY",             "AIzaSyC2toXhT_-NKleEB0lUkTCdGXmbp_WKa0c"),
     "authDomain":        os.environ.get("FIREBASE_AUTH_DOMAIN",         "wdvm-18790.firebaseapp.com"),
     "databaseURL":       os.environ.get("FIREBASE_DATABASE_URL",        "https://wdvm-18790-default-rtdb.firebaseio.com"),
@@ -65,6 +63,7 @@ _pyrebase_app = pyrebase.initialize_app(FIREBASE_CONFIG)
 #: Use this to call sign_in_with_email_and_password / create_user_with_email_and_password
 fb_auth = _pyrebase_app.auth()
 
+<<<<<<< HEAD
 # ── REST-based fallbacks (used when service_account.json is absent) ───────────
 
 class _RestQuery:
@@ -151,19 +150,3 @@ else:
     )
     admin_db   = _RestAdminDB(FIREBASE_CONFIG["databaseURL"])  # type: ignore[assignment]
     admin_auth = _StubAdminAuth()                              # type: ignore[assignment]
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def username_to_auth_email(username: str) -> str:
-    """Convert a kiosk username to the canonical Firebase Auth email.
-
-    Examples
-    --------
-    "John Doe" → "john_doe@wdv.app"
-    """
-    safe = "".join(
-        c if c.isalnum() or c in ("-", "_") else "_"
-        for c in username.lower()
-    )
-    return f"{safe}@wdv.app"

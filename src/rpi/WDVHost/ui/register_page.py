@@ -3,7 +3,7 @@ from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, BTN_WIDE, PAD
 from app_state import ACTIVATION_FEE, WELCOME_BONUS
 import storage
-from firebase_config import fb_auth, username_to_auth_email
+from firebase_config import fb_auth
 
 
 class RegisterPage(BasePage):
@@ -126,6 +126,10 @@ class RegisterPage(BasePage):
             self.controller.show_alert("Missing Password", "Please enter a password.")
             return
 
+        if not email or "@" not in email:
+            self.controller.show_alert("Missing Email", "Please enter a valid email address.")
+            return
+
         # Deduct activation fee (1 pt) then award welcome bonus
         self.app_state.user.points -= 1
         self.app_state.add_transaction("Activation Fee", -1)
@@ -137,10 +141,9 @@ class RegisterPage(BasePage):
         self.app_state.user.phone    = phone
         self.app_state.user.is_guest = False
 
-        auth_email = username_to_auth_email(username)
         try:
-            # ── Step 1: Create Firebase Auth account ──────────────────────────
-            result = fb_auth.create_user_with_email_and_password(auth_email, password)
+            # ── Step 1: Create Firebase Auth account using real email ─────────
+            result = fb_auth.create_user_with_email_and_password(email, password)
             uid    = result["localId"]
             self.app_state.user.uid = uid
 

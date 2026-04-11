@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, PAD
-import storage
+from firebase_config import fb_auth
 
 
 class ForgotPasswordPage(BasePage):
@@ -26,56 +26,45 @@ class ForgotPasswordPage(BasePage):
 
         ctk.CTkLabel(
             card,
-            text="Enter your registered phone number to verify your identity.",
+            text="Enter your registered email. A reset link will be sent to your inbox.",
             font=ctk.CTkFont(*F["small"]),
             text_color=C["steel"],
             wraplength=280,
         ).grid(row=1, column=0, padx=PAD, pady=(0, 10))
 
-        self._e_phone = self.make_entry(card, placeholder="Registered Phone Number")
-        self._e_pass  = self.make_entry(card, placeholder="New Password", show="●")
+        self._e_email = self.make_entry(card, placeholder="Registered Email")
 
-        self._e_phone.grid(row=2, column=0, padx=PAD, pady=6, sticky="ew")
-        self._e_pass.grid( row=3, column=0, padx=PAD, pady=6, sticky="ew")
+        self._e_email.grid(row=2, column=0, padx=PAD, pady=6, sticky="ew")
 
         self.make_button(
-            card, "Update Password",
+            card, "Send Reset Email",
             command=self._reset,
             color=C["accent"],
             height=BTN_HEIGHT,
-        ).grid(row=4, column=0, padx=PAD, pady=(10, PAD), sticky="ew")
+        ).grid(row=3, column=0, padx=PAD, pady=(10, PAD), sticky="ew")
 
         self.make_back_button(self, "signin").grid(
             row=1, column=0, padx=PAD, pady=(0, PAD), sticky="w"
         )
 
     def on_show(self) -> None:
-        self._e_phone.delete(0, "end")
-        self._e_pass.delete(0, "end")
+        self._e_email.delete(0, "end")
 
     def _reset(self) -> None:
-        phone    = self._e_phone.get().strip()
-        new_pass = self._e_pass.get()
+        email = self._e_email.get().strip()
 
-        if not new_pass:
-            self.controller.show_alert("Missing Password", "Please enter a new password.")
-            return
-
-        # Look up user by phone in RTDB (storage.find_user_by_phone is now Firebase-backed)
-        data = storage.find_user_by_phone(phone)
-        if not data:
-            self.controller.show_alert("Not Found", "No account with that phone number.")
-            return
-
-        uid = data.get("uid", "")
-        if not uid:
-            self.controller.show_alert("Error", "Account found but UID missing. Contact support.")
+        if not email or "@" not in email:
+            self.controller.show_alert("Missing Email", "Please enter your registered email.")
             return
 
         try:
-            # Update password via Firebase Admin SDK — no old password required
-            storage.update_password(uid, new_pass)
-            self.controller.show_alert("Password Updated", "Your password has been updated.")
+            # Send Firebase password reset email — user receives link in their Gmail
+            fb_auth.send_password_reset_email(email)
+            self.controller.show_alert(
+                "Email Sent",
+                f"A password reset link has been sent to:\n{email}\n\nCheck your inbox.",
+            )
             self.controller.show_page("signin")
         except Exception as exc:
-            self.controller.show_alert("Update Failed", f"Could not update password:\n{exc}")
+            self.controller.show_alert("Failed", f"Could not send reset email:\n{exc}")
+
