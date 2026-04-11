@@ -42,7 +42,7 @@ from firebase_admin import credentials, auth as _fb_admin_auth, db as _fb_admin_
 # Fill values directly OR export them as environment variables before starting.
 
 FIREBASE_CONFIG: dict = {
-<<<<<<< HEAD
+
     "apiKey":            os.environ.get("FIREBASE_API_KEY",             "AIzaSyC2toXhT_-NKleEB0lUkTCdGXmbp_WKa0c"),
     "authDomain":        os.environ.get("FIREBASE_AUTH_DOMAIN",         "wdvm-18790.firebaseapp.com"),
     "databaseURL":       os.environ.get("FIREBASE_DATABASE_URL",        "https://wdvm-18790-default-rtdb.firebaseio.com"),
@@ -63,7 +63,6 @@ _pyrebase_app = pyrebase.initialize_app(FIREBASE_CONFIG)
 #: Use this to call sign_in_with_email_and_password / create_user_with_email_and_password
 fb_auth = _pyrebase_app.auth()
 
-<<<<<<< HEAD
 # ── REST-based fallbacks (used when service_account.json is absent) ───────────
 
 class _RestQuery:
