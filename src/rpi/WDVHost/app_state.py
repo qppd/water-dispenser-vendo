@@ -128,11 +128,16 @@ class AppState:
         # Pending cash inserted during activation (pesos, not points)
         self._activation_cash: int = 0
 
+        # Temperature readings from ESPWDV (updated every ~5 s by SecondESPSerial)
+        # Values are float °C, or None until the first reading arrives.
+        self.temperatures: dict = {"HOT": None, "WARM": None, "COLD": None}
+
         # Optional callbacks registered by the active page
         self._on_coin: Optional[Callable[[int], None]] = None
         self._on_bill: Optional[Callable[[int], None]] = None
         self._on_dispense_complete: Optional[Callable[[], None]] = None
         self._on_qr_scanned: Optional[Callable[[str], None]] = None
+        self._on_temperature_update: Optional[Callable[[], None]] = None
 
     # ── User helpers ──────────────────────────────────────────────────────────
 
@@ -248,6 +253,7 @@ class AppState:
         self._on_bill = None
         self._on_dispense_complete = None
         self._on_qr_scanned = None
+        self._on_temperature_update = None
 
     def dispatch_coin(self, value: int) -> None:
         if self._on_coin:
@@ -264,3 +270,17 @@ class AppState:
     def dispatch_qr_scanned(self, data: str) -> None:
         if self._on_qr_scanned:
             self._on_qr_scanned(data)
+
+    # ── Temperature helpers ───────────────────────────────────────────────────
+
+    def update_temperature(self, sensor: str, value: float) -> None:
+        """Store a new temperature reading and fire the update callback."""
+        if sensor in self.temperatures:
+            self.temperatures[sensor] = value
+            if self._on_temperature_update:
+                self._on_temperature_update()
+
+    def register_temperature_callback(
+        self, cb: Optional[Callable[[], None]]
+    ) -> None:
+        self._on_temperature_update = cb

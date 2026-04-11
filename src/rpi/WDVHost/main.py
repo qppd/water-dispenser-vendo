@@ -35,6 +35,7 @@ if _HERE not in sys.path:
 
 from app_state import AppState
 from serial_manager import SerialManager
+from serial_second_esp import SecondESPSerial
 from qr_scanner import QRScanner
 from thermal_printer import ThermalPrinter
 from ui.theme import C, WIN_W, WIN_H, SIDEBAR_W
@@ -106,6 +107,16 @@ class MainApp(ctk.CTk):
             port=port,
         )
         self.serial_mgr.start()
+
+        # ── Second ESP32 (ESPWDV dispenser) via hardware UART ─────────────────
+        # RPi GPIO14/15 → /dev/serial0 @ 115200 baud
+        # Receives periodic temperature readings; sends relay/SSR commands.
+        second_port = "/dev/serial0" if not simulation_mode else None
+        self.second_esp = SecondESPSerial(
+            event_queue=self.app_state.hw_event_queue,  # share existing queue
+            port=second_port,
+        )
+        self.second_esp.start()
 
         # ── QR scanner (USB HID keyboard-mode) ────────────────────────────────
         self.qr_scanner = QRScanner(
@@ -353,7 +364,12 @@ class MainApp(ctk.CTk):
                 self.app_state.dispatch_dispense_complete()
             elif etype == "QR_SCANNED":
                 self.app_state.dispatch_qr_scanned(event.get("data", ""))
-            # "raw" lines are silently ignored here
+            elif etype == "temp":
+                self.app_state.update_temperature(
+                    event.get("sensor", ""), event.get("value", 0.0)
+                )
+                self.sidebar.refresh_temps()
+            # "raw" / "esp_status" lines are silently ignored here
 
         self.after(50, self._poll_hw_events)
 
@@ -362,6 +378,7 @@ class MainApp(ctk.CTk):
     def _on_close(self) -> None:
         self.qr_scanner.stop()
         self.serial_mgr.stop()
+        self.second_esp.stop()
         self.printer.disconnect()
         self.destroy()
 

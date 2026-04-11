@@ -20,7 +20,7 @@ class RegisterPage(BasePage):
             border_color=C["aqua"],
             border_width=2,
         )
-        card.grid(row=0, column=0, padx=80, pady=20, sticky="")
+        card.grid(row=0, column=0, padx=50, pady=20, sticky="")
         card.columnconfigure(0, weight=1)
 
         self.make_heading(card, "Account Setup").grid(
@@ -49,10 +49,12 @@ class RegisterPage(BasePage):
         ).grid(row=2, column=0, padx=PAD, pady=(0, 10), sticky="ew")
 
         # ── Form fields ────────────────────────────────────────────────────────
-        self._e_user  = self.make_entry(card, placeholder="Username")
-        self._e_email = self.make_entry(card, placeholder="Email")
-        self._e_phone = self.make_entry(card, placeholder="Phone Number")
-        self._e_pass  = self.make_entry(card, placeholder="Password", show="●")
+        self._e_user  = self.make_entry(card, placeholder="Enter your username", width=300)
+        self._e_email = self.make_entry(card, placeholder="Enter your email", width=300)
+        self._e_phone = self.make_entry(card, placeholder="Enter your phone number", width=300)
+        self._e_pass  = self.make_entry(
+            card, placeholder="Enter your password", show="\u25cf", width=300
+        )
 
         for idx, widget in enumerate(
             [self._e_user, self._e_email, self._e_phone, self._e_pass], start=3

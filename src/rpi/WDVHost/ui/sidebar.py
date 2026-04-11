@@ -87,6 +87,67 @@ class Sidebar(ctk.CTkFrame):
         )
         self.rowconfigure(4, weight=1)
 
+        # ── Temperature card ──────────────────────────────────────────────────
+        temp_card = ctk.CTkFrame(self, fg_color="#0d3a5c", corner_radius=8)
+        temp_card.grid(row=5, column=0, padx=10, pady=(0, 6), sticky="ew")
+        temp_card.columnconfigure(0, weight=1)
+        temp_card.columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            temp_card,
+            text="TEMPERATURE",
+            font=ctk.CTkFont("Segoe UI", 8, "bold"),
+            text_color="#b3e5fc",
+        ).grid(row=0, column=0, columnspan=2, padx=6, pady=(6, 2))
+
+        # HOT row
+        ctk.CTkLabel(
+            temp_card,
+            text="\U0001f525 HOT",
+            font=ctk.CTkFont("Segoe UI", 10, "bold"),
+            text_color="#ff7043",
+        ).grid(row=1, column=0, padx=(8, 2), pady=2, sticky="w")
+
+        self._lbl_temp_hot = ctk.CTkLabel(
+            temp_card,
+            text="--.-\u00b0C",
+            font=ctk.CTkFont("Segoe UI", 10, "bold"),
+            text_color="#ffccbc",
+        )
+        self._lbl_temp_hot.grid(row=1, column=1, padx=(2, 8), pady=2, sticky="e")
+
+        # WARM row
+        ctk.CTkLabel(
+            temp_card,
+            text="\U0001f324\ufe0f WARM",
+            font=ctk.CTkFont("Segoe UI", 10, "bold"),
+            text_color="#ffca28",
+        ).grid(row=2, column=0, padx=(8, 2), pady=2, sticky="w")
+
+        self._lbl_temp_warm = ctk.CTkLabel(
+            temp_card,
+            text="--.-\u00b0C",
+            font=ctk.CTkFont("Segoe UI", 10, "bold"),
+            text_color="#fff9c4",
+        )
+        self._lbl_temp_warm.grid(row=2, column=1, padx=(2, 8), pady=2, sticky="e")
+
+        # COLD row
+        ctk.CTkLabel(
+            temp_card,
+            text="\u2744\ufe0f COLD",
+            font=ctk.CTkFont("Segoe UI", 10, "bold"),
+            text_color="#4fc3f7",
+        ).grid(row=3, column=0, padx=(8, 2), pady=(2, 6), sticky="w")
+
+        self._lbl_temp_cold = ctk.CTkLabel(
+            temp_card,
+            text="--.-\u00b0C",
+            font=ctk.CTkFont("Segoe UI", 10, "bold"),
+            text_color="#b3e5fc",
+        )
+        self._lbl_temp_cold.grid(row=3, column=1, padx=(2, 8), pady=(2, 6), sticky="e")
+
         # ── Logout button ─────────────────────────────────────────────────────
         ctk.CTkButton(
             self,
@@ -98,16 +159,27 @@ class Sidebar(ctk.CTkFrame):
             height=44,
             corner_radius=BTN_CORNER,
             font=ctk.CTkFont("Segoe UI", 13, "bold"),
-        ).grid(row=5, column=0, padx=10, pady=(0, 20), sticky="ew")
+        ).grid(row=6, column=0, padx=10, pady=(0, 20), sticky="ew")
 
     # ── Public ────────────────────────────────────────────────────────────────
 
     def refresh(self) -> None:
-        """Sync labels from current app state."""
+        """Sync user labels from current app state."""
         u = self.app_state.user
         self._lbl_user.configure(text=u.username)
         self._lbl_email.configure(text=u.email)
         self._lbl_pts.configure(text=str(u.points))
+
+    def refresh_temps(self) -> None:
+        """Update temperature labels from app_state.temperatures."""
+        temps = self.app_state.temperatures
+
+        def _fmt(val) -> str:
+            return f"{val:.1f}\u00b0C" if val is not None else "--.-\u00b0C"
+
+        self._lbl_temp_hot.configure(text=_fmt(temps.get("HOT")))
+        self._lbl_temp_warm.configure(text=_fmt(temps.get("WARM")))
+        self._lbl_temp_cold.configure(text=_fmt(temps.get("COLD")))
 
     # ── Private ───────────────────────────────────────────────────────────────
 

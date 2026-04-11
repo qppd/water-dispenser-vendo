@@ -19,15 +19,17 @@ class LoginPage(BasePage):
             border_color=C["aqua"],
             border_width=2,
         )
-        card.grid(row=0, column=0, padx=100, pady=30, sticky="")
+        card.grid(row=0, column=0, padx=60, pady=30, sticky="")
         card.columnconfigure(0, weight=1)
 
         self.make_heading(card, "Sign In").grid(
             row=0, column=0, padx=PAD, pady=(PAD, 12), sticky="ew"
         )
 
-        self._e_user = self.make_entry(card, placeholder="Username")
-        self._e_pass = self.make_entry(card, placeholder="Password", show="●")
+        self._e_user = self.make_entry(card, placeholder="Enter your username", width=320)
+        self._e_pass = self.make_entry(
+            card, placeholder="Enter your password", show="\u25cf", width=320
+        )
 
         self._e_user.grid(row=1, column=0, padx=PAD, pady=6, sticky="ew")
         self._e_pass.grid(row=2, column=0, padx=PAD, pady=6, sticky="ew")

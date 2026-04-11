@@ -92,14 +92,15 @@ static void handleSerialCommand(const String& cmd) {
         Serial.printf("FLOW3: %.3f L/min | Total: %.1f mL\n",
                       flow3.readFlowRate(), flow3.getTotalVolume());
     }
-    // Temperature reading
+    // Temperature reading (debug: blocking wait acceptable on USB monitor)
     else if (cmd == "TEMP") {
         temp1.requestTemperature();
         temp2.requestTemperature();
         temp3.requestTemperature();
-        Serial.printf("TEMP1 (GPIO%d): %.2f C\n", DS18B20_1_PIN, temp1.getTemperatureC());
-        Serial.printf("TEMP2 (GPIO%d): %.2f C\n", DS18B20_2_PIN, temp2.getTemperatureC());
-        Serial.printf("TEMP3 (GPIO%d): %.2f C\n", DS18B20_3_PIN, temp3.getTemperatureC());
+        delay(1000);  // wait for conversion (non-blocking mode is off; needed here)
+        Serial.printf("TEMP HOT  (GPIO%d): %.2f C\n", DS18B20_1_PIN, temp1.getTemperatureC());
+        Serial.printf("TEMP WARM (GPIO%d): %.2f C\n", DS18B20_2_PIN, temp2.getTemperatureC());
+        Serial.printf("TEMP COLD (GPIO%d): %.2f C\n", DS18B20_3_PIN, temp3.getTemperatureC());
     }
     // Full status dump
     else if (cmd == "STATUS") {
@@ -119,9 +120,10 @@ static void handleSerialCommand(const String& cmd) {
         temp1.requestTemperature();
         temp2.requestTemperature();
         temp3.requestTemperature();
-        Serial.printf("TEMP1 (GPIO%d): %.2f C\n", DS18B20_1_PIN, temp1.getTemperatureC());
-        Serial.printf("TEMP2 (GPIO%d): %.2f C\n", DS18B20_2_PIN, temp2.getTemperatureC());
-        Serial.printf("TEMP3 (GPIO%d): %.2f C\n", DS18B20_3_PIN, temp3.getTemperatureC());
+        delay(1000);  // wait for conversion
+        Serial.printf("TEMP HOT  (GPIO%d): %.2f C\n", DS18B20_1_PIN, temp1.getTemperatureC());
+        Serial.printf("TEMP WARM (GPIO%d): %.2f C\n", DS18B20_2_PIN, temp2.getTemperatureC());
+        Serial.printf("TEMP COLD (GPIO%d): %.2f C\n", DS18B20_3_PIN, temp3.getTemperatureC());
         Serial.println("==============");
     }
     else {
@@ -198,6 +200,16 @@ void setup() {
     RpiSerial.println("ESP:STATUS:READY");
 }
 
+// ── Temperature broadcast state (module-level, used in loop) ─────────────────
+static unsigned long _tempReqMs     = 0;   // millis() when last conversion was requested
+static unsigned long _tempLastSendMs= 0;   // millis() of last completed broadcast
+static bool          _tempConverting= false; // true while waiting for conversion
+
+// Interval between temperature broadcasts (5 seconds)
+#define TEMP_BROADCAST_INTERVAL_MS 5000UL
+// DS18B20 12-bit conversion time: 750 ms; use 800 ms for safety margin
+#define TEMP_CONVERSION_WAIT_MS    800UL
+
 // ── Loop ──────────────────────────────────────────────────────────────────────
 void loop() {
     // ── 1. USB Serial monitor commands (for debugging / testing) ─────────────
@@ -227,5 +239,41 @@ void loop() {
             RpiSerial.printf("ESP:FLOW%u:%.3f\n", i + 1, fs.readFlowRate());
             RpiSerial.printf("ESP:VOL%u:%.1f\n",  i + 1, fs.getTotalVolume());
         }
+    }
+
+    // ── 4. Non-blocking periodic temperature broadcast (every 5 s) ───────────
+    //
+    // Phase A: Every 5 seconds, start a conversion on all 3 sensors.
+    //          setWaitForConversion(false) was set in DS18B20Sensor::begin(),
+    //          so requestTemperature() returns immediately (no blocking delay).
+    //
+    // Phase B: After 800 ms (conversion complete), read values and send to RPi.
+    //
+    // Format sent on RpiSerial (UART2):
+    //   TEMP:HOT:<celsius>    e.g.  TEMP:HOT:45.2
+    //   TEMP:WARM:<celsius>          TEMP:WARM:32.8
+    //   TEMP:COLD:<celsius>          TEMP:COLD:12.4
+    // ─────────────────────────────────────────────────────────────────────────
+    unsigned long nowMs = millis();
+
+    // Phase A — trigger conversion
+    if (!_tempConverting && (nowMs - _tempLastSendMs >= TEMP_BROADCAST_INTERVAL_MS)) {
+        temp1.requestTemperature();   // HOT  tank
+        temp2.requestTemperature();   // WARM tank
+        temp3.requestTemperature();   // COLD tank
+        _tempReqMs     = nowMs;
+        _tempConverting= true;
+    }
+
+    // Phase B — read and transmit (runs once, 800 ms after Phase A)
+    if (_tempConverting && (millis() - _tempReqMs >= TEMP_CONVERSION_WAIT_MS)) {
+        float hot  = temp1.getTemperatureC();
+        float warm = temp2.getTemperatureC();
+        float cold = temp3.getTemperatureC();
+        RpiSerial.printf("TEMP:HOT:%.1f\n",  hot);
+        RpiSerial.printf("TEMP:WARM:%.1f\n", warm);
+        RpiSerial.printf("TEMP:COLD:%.1f\n", cold);
+        _tempLastSendMs= millis();
+        _tempConverting= false;
     }
 }

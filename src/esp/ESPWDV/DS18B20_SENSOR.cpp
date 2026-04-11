@@ -9,6 +9,9 @@ void DS18B20Sensor::begin(uint8_t pin) {
     _oneWire = new OneWire(_pin);
     _sensors = new DallasTemperature(_oneWire);
     _sensors->begin();
+    // Non-blocking: requestTemperatures() returns immediately;
+    // caller must wait ~800 ms before reading (see ESPWDV loop).
+    _sensors->setWaitForConversion(false);
     _deviceCount = _sensors->getDeviceCount();
 }
 

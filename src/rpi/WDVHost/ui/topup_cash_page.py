@@ -59,6 +59,9 @@ class TopupCashPage(BasePage):
                 height=BTN_HEIGHT + 10,
                 font=F["sub"],
             )
+            # Cash insert buttons are disabled — only physical coin/bill hardware
+            # triggers credit.  Remove state="disabled" here to re-enable.
+            btn.configure(state="disabled")
             btn.grid(row=row_idx, column=col_idx, padx=6, pady=6, sticky="nsew")
 
         self.make_back_button(self, "topup_choices").grid(
