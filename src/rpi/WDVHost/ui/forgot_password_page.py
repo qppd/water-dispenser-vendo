@@ -57,11 +57,25 @@ class ForgotPasswordPage(BasePage):
         phone    = self._e_phone.get().strip()
         new_pass = self._e_pass.get()
 
+        if not new_pass:
+            self.controller.show_alert("Missing Password", "Please enter a new password.")
+            return
+
+        # Look up user by phone in RTDB (storage.find_user_by_phone is now Firebase-backed)
         data = storage.find_user_by_phone(phone)
-        if data:
-            data["password"] = new_pass
-            storage.save_user(data)
+        if not data:
+            self.controller.show_alert("Not Found", "No account with that phone number.")
+            return
+
+        uid = data.get("uid", "")
+        if not uid:
+            self.controller.show_alert("Error", "Account found but UID missing. Contact support.")
+            return
+
+        try:
+            # Update password via Firebase Admin SDK — no old password required
+            storage.update_password(uid, new_pass)
             self.controller.show_alert("Password Updated", "Your password has been updated.")
             self.controller.show_page("signin")
-        else:
-            self.controller.show_alert("Not Found", "No account with that phone number.")
+        except Exception as exc:
+            self.controller.show_alert("Update Failed", f"Could not update password:\n{exc}")

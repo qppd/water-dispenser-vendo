@@ -1,7 +1,12 @@
 # Python dependencies for WDVHost (Raspberry Pi kiosk)
 # Install with: pip install -r requirements.txt
 
+# ── UI & hardware ─────────────────────────────────────────────────────────────
 customtkinter>=5.2.0
 pyserial>=3.5
 qrcode[pil]>=7.0
 Pillow>=9.0
+
+# ── Firebase (single source of truth for accounts + credit) ──────────────────
+pyrebase4>=4.6.0        # User-facing Firebase Auth (sign-in / sign-up)
+firebase-admin>=6.3.0   # Admin SDK: RTDB access + password resets

@@ -24,3 +24,6 @@ config_local.py
 
 # Ignore thermal printer output files (if any)
 src/sample/thermal-printer/output/
+
+# Ignore web app local environment secrets
+src/web/WDVWeb/.env.local

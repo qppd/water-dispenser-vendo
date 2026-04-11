@@ -126,7 +126,7 @@ class DispensingPage(BasePage):
     def _begin_dispensing(self) -> None:
         sel = self.app_state.selection
 
-        # Deduct points and save
+        # Deduct points — AppState._sync_points_async() handles Firebase RTDB update
         ok = self.app_state.deduct_points(
             sel.cost_pts,
             f"{sel.service} {sel.volume_ml}ml {sel.temperature}",
@@ -135,10 +135,6 @@ class DispensingPage(BasePage):
             self.controller.show_alert("Insufficient Points", "Not enough points.")
             self.controller.show_page("volume")
             return
-
-        import storage
-        if not self.app_state.user.is_guest:
-            storage.save_user(self.app_state.user.to_dict())
 
         self.controller.sidebar.refresh()
 

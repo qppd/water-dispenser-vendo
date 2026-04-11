@@ -2,7 +2,7 @@ import customtkinter as ctk
 from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, BTN_WIDE, PAD
 from app_state import User
-import storage
+from firebase_config import fb_auth, admin_db, username_to_auth_email
 
 
 class LoginPage(BasePage):
@@ -61,12 +61,31 @@ class LoginPage(BasePage):
         username = self._e_user.get().strip()
         password = self._e_pass.get()
 
-        data = storage.load_user(username)
-        if data and data.get("password") == password:
+        if not username or not password:
+            self.controller.show_alert("Login Failed", "Please enter username and password.")
+            return
+
+        auth_email = username_to_auth_email(username)
+        try:
+            # ── Step 1: Authenticate via Firebase Auth ────────────────────────
+            result = fb_auth.sign_in_with_email_and_password(auth_email, password)
+            uid    = result["localId"]
+
+            # ── Step 2: Load user profile from RTDB ───────────────────────────
+            data = admin_db.reference(f"users/{uid}").get()
+            if data is None:
+                self.controller.show_alert(
+                    "Account Not Found",
+                    "Authentication succeeded but no kiosk account linked to this username.",
+                )
+                return
+
+            data["uid"] = uid
             user = User.from_dict(data)
             self.app_state.login(user)
             self.app_state.history.clear()
             self.controller.sidebar.refresh()
             self.controller.show_page("dashboard")
-        else:
+
+        except Exception:
             self.controller.show_alert("Login Failed", "Invalid username or password.")

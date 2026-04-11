@@ -3,6 +3,7 @@ from ui.base_page import BasePage
 from ui.theme import C, F, BTN_HEIGHT, BTN_WIDE, PAD
 from app_state import ACTIVATION_FEE, WELCOME_BONUS
 import storage
+from firebase_config import fb_auth, username_to_auth_email
 
 
 class RegisterPage(BasePage):
@@ -121,19 +122,40 @@ class RegisterPage(BasePage):
         phone    = self._e_phone.get().strip() or "---"
         password = self._e_pass.get()
 
+        if not password:
+            self.controller.show_alert("Missing Password", "Please enter a password.")
+            return
+
         # Deduct activation fee (1 pt) then award welcome bonus
         self.app_state.user.points -= 1
         self.app_state.add_transaction("Activation Fee", -1)
         self.app_state.user.points += WELCOME_BONUS
-        self.app_state.add_transaction(f"Welcome Bonus", WELCOME_BONUS)
+        self.app_state.add_transaction("Welcome Bonus", WELCOME_BONUS)
 
         self.app_state.user.username = username
         self.app_state.user.email    = email
         self.app_state.user.phone    = phone
-        self.app_state.user.password = password
         self.app_state.user.is_guest = False
 
-        storage.save_user(self.app_state.user.to_dict())
+        auth_email = username_to_auth_email(username)
+        try:
+            # ── Step 1: Create Firebase Auth account ──────────────────────────
+            result = fb_auth.create_user_with_email_and_password(auth_email, password)
+            uid    = result["localId"]
+            self.app_state.user.uid = uid
+
+            # ── Step 2: Save profile to RTDB (password stripped by storage.py) ─
+            storage.save_user(self.app_state.user.to_dict())
+
+        except Exception as exc:
+            # Roll back the in-memory point adjustments if Firebase call fails
+            self.app_state.user.points += 1
+            self.app_state.user.points -= WELCOME_BONUS
+            self.controller.show_alert(
+                "Registration Failed",
+                f"Could not create account:\n{exc}",
+            )
+            return
 
         self.controller.show_alert(
             "Success! 🎉",

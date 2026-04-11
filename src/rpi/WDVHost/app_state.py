@@ -1,4 +1,5 @@
 import queue
+import threading
 from dataclasses import dataclass, field
 from typing import List, Optional, Callable
 
@@ -45,6 +46,8 @@ class User:
     password: str = ""
     points: int = 0
     is_guest: bool = True
+    # Firebase UID — set on login; not stored in RTDB (stripped by storage.py)
+    uid: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -54,6 +57,7 @@ class User:
             "password": self.password,
             "points":   self.points,
             "is_guest": self.is_guest,
+            "uid":      self.uid,
         }
 
     @staticmethod
@@ -65,6 +69,7 @@ class User:
         u.password = data.get("password", "")
         u.points   = data.get("points",   0)
         u.is_guest = data.get("is_guest", True)
+        u.uid      = data.get("uid",      "")
         return u
 
 
@@ -171,6 +176,7 @@ class AppState:
 
         self.user.points += pts
         self.add_transaction(f"₱{peso_value} inserted", pts)
+        self._sync_points_async()
         return pts
 
     def activation_cash_inserted(self) -> int:
@@ -185,7 +191,28 @@ class AppState:
             return False
         self.user.points -= pts
         self.add_transaction(description, -pts)
+        self._sync_points_async()
         return True
+
+    def _sync_points_async(self) -> None:
+        """Push the current user's points to Firebase RTDB in a background thread.
+
+        No-op for guest sessions or if uid is unknown.
+        Errors are logged but never raised — the kiosk must not crash on sync issues.
+        """
+        if self.user.is_guest or not self.user.uid:
+            return
+        uid    = self.user.uid
+        points = self.user.points
+
+        def _do() -> None:
+            try:
+                from firebase_config import admin_db
+                admin_db.reference(f"users/{uid}/points").set(points)
+            except Exception as exc:
+                print(f"[AppState] Firebase sync error: {exc}")
+
+        threading.Thread(target=_do, daemon=True).start()
 
     # ── History helpers ───────────────────────────────────────────────────────
 
