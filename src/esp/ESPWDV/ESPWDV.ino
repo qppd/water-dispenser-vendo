@@ -47,6 +47,12 @@ static RelayTimer relayTimers[3] = {
     { false, RELAY3_PIN, 0, 0, "RELAY3" },
 };
 
+// ── Thermostat state ─────────────────────────────────────────────────────────
+// SSR2 (HEATER) maintains HOT water at 85°C; SSR3 (COOLER) maintains 5°C.
+// Both start true so heating/cooling begins immediately on boot.
+static bool _ssr2Active = true;   // SSR2 (GPIO33, HEATER2) — HOT water, target 85°C
+static bool _ssr3Active = true;   // SSR3 (GPIO25, COOLER1) — COLD water, target 5°C
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 static void startRelay(uint8_t idx, unsigned long durationMs) {
     if (idx > 2 || durationMs == 0) return;
@@ -169,10 +175,12 @@ static void handleRpiCommand(const String& msg) {
     } else if (command == "SSR2") {
         bool on = (value == "1" || value == "ON");
         operateSSR(SSR2_PIN, on);
+        _ssr2Active = on;   // keep thermostat state in sync
         RpiSerial.printf("ESP:SSR2:%s\n", on ? "ON" : "OFF");
     } else if (command == "SSR3") {
         bool on = (value == "1" || value == "ON");
         operateSSR(SSR3_PIN, on);
+        _ssr3Active = on;   // keep thermostat state in sync
         RpiSerial.printf("ESP:SSR3:%s\n", on ? "ON" : "OFF");
     } else if (command == "STOP") {
         for (uint8_t i = 0; i < 3; i++) relayTimers[i].active = false;
@@ -187,6 +195,10 @@ void setup() {
     RpiSerial.begin(SERIAL2_BAUD, SERIAL_8N1, UART2_RX_PIN, UART2_TX_PIN);
 
     initRELAY();
+
+    // Start heater (SSR2) and cooler (SSR3) immediately — thermostat manages them.
+    operateSSR(SSR2_PIN, true);   // HEATER ON  (_ssr2Active = true at init)
+    operateSSR(SSR3_PIN, true);   // COOLER ON  (_ssr3Active = true at init)
 
     flow1.begin(FLOW_SENSOR1_PIN);
     flow2.begin(FLOW_SENSOR2_PIN);
@@ -275,5 +287,33 @@ void loop() {
         RpiSerial.printf("TEMP:COLD:%.1f\n", cold);
         _tempLastSendMs= millis();
         _tempConverting= false;
+
+        // ── 5. Thermostat control (runs once per temperature cycle) ──────────
+        //
+        // SSR2 (HEATER) — HOT water, target 85°C, 2°C hysteresis.
+        //   Turn ON  when hot < 83°C (below lower threshold).
+        //   Turn OFF when hot ≥ 85°C (target reached).
+        if (!_ssr2Active && hot < 83.0f) {
+            operateSSR(SSR2_PIN, true);
+            _ssr2Active = true;
+            RpiSerial.println("ESP:SSR2:ON");
+        } else if (_ssr2Active && hot >= 85.0f) {
+            operateSSR(SSR2_PIN, false);
+            _ssr2Active = false;
+            RpiSerial.println("ESP:SSR2:OFF");
+        }
+
+        // SSR3 (COOLER) — COLD water, target 5°C, 2°C hysteresis.
+        //   Turn ON  when cold > 7°C (above upper threshold).
+        //   Turn OFF when cold ≤ 5°C (target reached).
+        if (!_ssr3Active && cold > 7.0f) {
+            operateSSR(SSR3_PIN, true);
+            _ssr3Active = true;
+            RpiSerial.println("ESP:SSR3:ON");
+        } else if (_ssr3Active && cold <= 5.0f) {
+            operateSSR(SSR3_PIN, false);
+            _ssr3Active = false;
+            RpiSerial.println("ESP:SSR3:OFF");
+        }
     }
 }

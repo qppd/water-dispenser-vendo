@@ -138,12 +138,13 @@ class DispensingPage(BasePage):
 
         self.controller.sidebar.refresh()
 
-        # Send hardware command
+        # Send hardware command — routes to correct ESPWDV relay via second_esp
         self._duration_ms = hardware_hooks.start_dispense(
             sel.service,
             sel.temperature,
             sel.volume_ml,
             self.controller.serial_mgr,
+            self.controller.second_esp,
         )
 
         self._instr_lbl.configure(text="Dispensing…")
@@ -205,7 +206,7 @@ class DispensingPage(BasePage):
 
     def _emergency_stop(self) -> None:
         self._cancel_pending_jobs()
-        hardware_hooks.stop_dispense(self.controller.serial_mgr)
+        hardware_hooks.stop_dispense(self.controller.serial_mgr, self.controller.second_esp)
         self.app_state.clear_callbacks()
         self.controller.show_alert("Stopped", "Dispense halted.")
         self.controller.show_page("dashboard")

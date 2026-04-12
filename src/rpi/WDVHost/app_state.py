@@ -26,8 +26,9 @@ REGISTERED_RATES = {1: 1, 5: 6, 10: 13, 20: 25, 50: 60, 100: 115}
 # Accepted cash denominations
 CASH_VALUES = [1, 5, 10, 20, 50, 100]
 
-# Relay open duration (ms) per ml — calibrate to real hardware
-ML_TO_MS = {100: 1000, 250: 2500, 500: 5000, 1000: 10_000}
+# Relay open duration (ms) per ml — based on ~1.75 L/min pump flow rate
+# Formula: ms = round(volume_ml * 60_000 / 1_750)
+ML_TO_MS = {100: 3429, 250: 8571, 500: 17143, 1000: 34286}
 
 # Activation fee in pesos
 ACTIVATION_FEE = 10

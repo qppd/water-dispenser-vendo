@@ -1,11 +1,20 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from app_state import ML_TO_MS
-
 if TYPE_CHECKING:
     from serial_manager import SerialManager
+    from serial_second_esp import SecondESPSerial
     from thermal_printer import ThermalPrinter
+
+# Flow rate: ~1.75 L/min average. ms = round(volume_ml * 60_000 / 1_750)
+_FLOW_RATE_ML_PER_MS = 1_750.0 / 60_000.0   # mL per millisecond
+
+# Relay mapping: temperature → relay number on ESPWDV
+_TEMP_TO_RELAY = {
+    "Cold": 1,   # R1 → Valve1+Pump1 (COLD water)
+    "Warm": 2,   # R2 → Valve2+Pump2 (WARM water)
+    "Hot":  3,   # R3 → Valve3+Pump3 (HOT  water)
+}
 
 
 def insert_coin(value: int, serial_mgr: "SerialManager") -> None:
@@ -26,34 +35,36 @@ def start_dispense(
     temperature: str,
     volume_ml: int,
     serial_mgr: "SerialManager",
+    second_esp: "SecondESPSerial",
 ) -> int:
     """
-    Trigger water dispensing.
+    Trigger water dispensing via the ESPWDV (second ESP32).
 
     Parameters
     ----------
     service     : "Dispense" (bottle) | "Fountain"
-    temperature : "Cold" | "Warm" | "Hot"  (informational for future relay mapping)
-    volume_ml   : target volume
-    serial_mgr  : active SerialManager instance
+    temperature : "Cold" | "Warm" | "Hot"  — selects the relay
+    volume_ml   : target volume in mL
+    serial_mgr  : first ESP32 serial manager (bill/coin acceptor)
+    second_esp  : second ESP32 serial manager (ESPWDV dispenser)
 
     Returns
     -------
     Expected dispense duration in milliseconds.
     """
-    duration_ms = ML_TO_MS.get(volume_ml, 2000)
+    # Dynamic duration based on pump flow rate (~1.75 L/min)
+    duration_ms = max(1, round(volume_ml / _FLOW_RATE_ML_PER_MS))
 
-    if service == "Fountain":
-        serial_mgr.fountain(duration_ms)
-    else:
-        serial_mgr.dispense(duration_ms)
+    # Route to the correct relay: Cold→R1, Warm→R2, Hot→R3
+    relay_num = _TEMP_TO_RELAY.get(temperature, 1)
+    second_esp.relay(relay_num, duration_ms)
 
     return duration_ms
 
 
-def stop_dispense(serial_mgr: "SerialManager") -> None:
-    """Emergency stop for all relays."""
-    serial_mgr.stop_flow()
+def stop_dispense(serial_mgr: "SerialManager", second_esp: "SecondESPSerial") -> None:
+    """Emergency stop for all relays on the ESPWDV."""
+    second_esp.stop_all()
 
 
 def scan_qr(serial_mgr: "SerialManager") -> None:
