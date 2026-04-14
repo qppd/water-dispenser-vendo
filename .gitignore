@@ -2,6 +2,10 @@
 .venv/
 venv/
 
+# Ignore Firebase service account credentials (contains private key — never commit)
+service_account.json
+*-firebase-adminsdk-*.json
+
 # Ignore pycache
 __pycache__/
 
