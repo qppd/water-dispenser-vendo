@@ -27,14 +27,14 @@ class VolumePage(BasePage):
         self._container = ctk.CTkFrame(self, fg_color="transparent")
         self._container.grid(row=2, column=0, padx=PAD, pady=4, sticky="nsew")
 
-        self.make_back_button(self, "services").grid(
+        self.make_back_button(self, "temperature").grid(
             row=3, column=0, padx=PAD, pady=(4, PAD), sticky="w"
         )
 
     def on_show(self) -> None:
         sel = self.app_state.selection
         temp_str = f" ({sel.temperature})" if sel.temperature else ""
-        svc_str  = "Fountain Volume" if sel.service == "Fountain" else f"Volume{temp_str}"
+        svc_str  = f"Fountain{temp_str}" if sel.service == "Fountain" else f"Volume{temp_str}"
         self._heading.configure(text=svc_str)
         self._bal_lbl.configure(text=f"Your balance: {self.app_state.user.points} pts")
 

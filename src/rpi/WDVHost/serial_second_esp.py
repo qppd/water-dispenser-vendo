@@ -147,11 +147,15 @@ class SecondESPSerial:
         # ── ESP status / completion messages ──────────────────────────────────
         m = _ESP_RE.match(line)
         if m:
-            self._q.put({
-                "type":  "esp_status",
-                "cmd":   m.group(1),
-                "value": m.group(2),
-            })
+            cmd   = m.group(1)
+            value = m.group(2)
+            if cmd == "DONE":
+                # ESP:DONE:RELAY1 / RELAY2 / RELAY3 — relay timer expired,
+                # dispense is complete.  Translate to a dispense_complete event
+                # so DispensingPage._on_hw_complete() fires correctly.
+                self._q.put({"type": "dispense_complete"})
+            else:
+                self._q.put({"type": "esp_status", "cmd": cmd, "value": value})
             return
 
         # ── Unrecognised line ──────────────────────────────────────────────────

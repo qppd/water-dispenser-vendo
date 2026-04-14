@@ -6,15 +6,21 @@ if TYPE_CHECKING:
     from serial_second_esp import SecondESPSerial
     from thermal_printer import ThermalPrinter
 
-# Flow rate: ~1.75 L/min average. ms = round(volume_ml * 60_000 / 1_750)
-_FLOW_RATE_ML_PER_MS = 1_750.0 / 60_000.0   # mL per millisecond
+from app_state import ML_TO_MS
 
 # Relay mapping: temperature → relay number on ESPWDV
+# Warm is handled separately via RPI:WARM:<ms> (sequential hot+cold mixing).
 _TEMP_TO_RELAY = {
     "Cold": 1,   # R1 → Valve1+Pump1 (COLD water)
-    "Warm": 2,   # R2 → Valve2+Pump2 (WARM water)
     "Hot":  3,   # R3 → Valve3+Pump3 (HOT  water)
 }
+
+# Warm water mixing target: 40 °C from 85 °C hot and 5 °C cold.
+# Formula: hot_frac = (T_target - T_cold) / (T_hot - T_cold)
+#          = (40 - 5) / (85 - 5) = 35/80 = 0.4375
+# The ESP32 receives RPI:WARM:<total_ms> and runs R3 (hot) then R1 (cold)
+# sequentially using this ratio, then sends ESP:DONE:WARM when complete.
+_WARM_HOT_FRAC = 0.4375
 
 
 def insert_coin(value: int, serial_mgr: "SerialManager") -> None:
@@ -52,12 +58,21 @@ def start_dispense(
     -------
     Expected dispense duration in milliseconds.
     """
-    # Dynamic duration based on pump flow rate (~1.75 L/min)
-    duration_ms = max(1, round(volume_ml / _FLOW_RATE_ML_PER_MS))
+    # Look up the exact relay duration for this volume (100/250/500/1000 ml).
+    # Falls back to a dynamic calculation for any unlisted volume.
+    duration_ms = ML_TO_MS.get(
+        volume_ml,
+        max(1, round(volume_ml * 60_000 / 1_750)),
+    )
 
-    # Route to the correct relay: Cold→R1, Warm→R2, Hot→R3
-    relay_num = _TEMP_TO_RELAY.get(temperature, 1)
-    second_esp.relay(relay_num, duration_ms)
+    if temperature == "Warm":
+        # Sequential mixing: ESP32 opens R3 (hot) then R1 (cold) in ratio 44/56.
+        # Send a single RPI:WARM:<total_ms> command; ESP32 handles the phasing.
+        second_esp.send_command(f"RPI:WARM:{duration_ms}")
+    else:
+        # Route to the correct relay: Cold→R1, Hot→R3
+        relay_num = _TEMP_TO_RELAY.get(temperature, 1)
+        second_esp.relay(relay_num, duration_ms)
 
     return duration_ms
 

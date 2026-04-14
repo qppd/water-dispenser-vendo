@@ -57,6 +57,23 @@ static RelayTimer relayTimers[3] = {
     { false, RELAY3_PIN, 0, 0, "RELAY3" },
 };
 
+// ── Warm-water sequential mixer state ────────────────────────────────────────
+// RPI:WARM:<total_ms>  causes the ESP32 to run two phases:
+//   Phase 1: R3 (HOT pump/valve)  for hot_ms  = round(total_ms * 0.4375)
+//   Phase 2: R1 (COLD pump/valve) for cold_ms = total_ms - hot_ms
+// After Phase 2 completes, ESP:DONE:WARM is sent to the RPi.
+//
+// Target warm temperature: 40 °C
+//   hot_frac = (40 - 5) / (85 - 5) = 35/80 = 0.4375  (44 %)
+//   cold_frac = 45/80 = 0.5625                          (56 %)
+struct WarmMixer {
+    bool          active;
+    uint8_t       phase;     // 1 = hot running, 2 = cold running
+    unsigned long cold_ms;   // duration saved for the cold phase
+};
+
+static WarmMixer warmMixer = { false, 0, 0UL };
+
 // ── Thermostat state ─────────────────────────────────────────────────────────
 // SSR2 (HEATER) maintains HOT water at 85°C; SSR3 (COOLER) maintains 5°C.
 // Both start true so heating/cooling begins immediately on boot.
@@ -155,6 +172,7 @@ static void handleSerialCommand(const String& cmd) {
 //   RPI:RELAY1:<ms>   open relay 1 for <ms> milliseconds
 //   RPI:RELAY2:<ms>   open relay 2 for <ms> milliseconds
 //   RPI:RELAY3:<ms>   open relay 3 for <ms> milliseconds
+//   RPI:WARM:<ms>     warm dispense — R3(HOT 44%) then R1(COLD 56%) sequentially
 //   RPI:SSR1:1|ON     turn SSR1 on
 //   RPI:SSR1:0|OFF    turn SSR1 off
 //   RPI:SSR2:1|ON     turn SSR2 on / off
@@ -178,6 +196,17 @@ static void handleRpiCommand(const String& msg) {
         startRelay(1, (unsigned long)value.toInt());
     } else if (command == "RELAY3") {
         startRelay(2, (unsigned long)value.toInt());
+    } else if (command == "WARM") {
+        // Sequential hot+cold mixing for warm water (~40 °C).
+        // Phase 1: R3 (HOT)  for 43.75 % of total duration.
+        // Phase 2: R1 (COLD) for the remaining 56.25 %.
+        unsigned long total_ms = (unsigned long)value.toInt();
+        unsigned long hot_ms   = (unsigned long)round(total_ms * 0.4375f);
+        unsigned long cold_ms  = total_ms - hot_ms;
+        warmMixer.active  = true;
+        warmMixer.phase   = 1;
+        warmMixer.cold_ms = cold_ms;
+        startRelay(2, hot_ms);  // index 2 = RELAY3 (R3, HOT pump/valve)
     } else if (command == "SSR1") {
         bool on = (value == "1" || value == "ON");
         operateSSR(SSR1_PIN, on);
@@ -194,6 +223,7 @@ static void handleRpiCommand(const String& msg) {
         RpiSerial.printf("ESP:SSR3:%s\n", on ? "ON" : "OFF");
     } else if (command == "STOP") {
         for (uint8_t i = 0; i < 3; i++) relayTimers[i].active = false;
+        warmMixer.active = false;   // cancel any in-progress warm mixing
         stopAllRelays();
         RpiSerial.println("ESP:STOP:OK");
     }
@@ -260,11 +290,24 @@ void loop() {
             operateRELAY(t.pin, false);
             t.active = false;
 
-            // Report completion + flow reading to RPi
-            FlowSensor& fs = flowByIndex(i);
-            RpiSerial.printf("ESP:DONE:%s\n", t.label);
-            RpiSerial.printf("ESP:FLOW%u:%.3f\n", i + 1, fs.readFlowRate());
-            RpiSerial.printf("ESP:VOL%u:%.1f\n",  i + 1, fs.getTotalVolume());
+            if (warmMixer.active) {
+                // ── Warm-water mixing: intercept relay expiry ─────────────────
+                if (warmMixer.phase == 1) {
+                    // Hot phase done → start cold phase (R1)
+                    warmMixer.phase = 2;
+                    startRelay(0, warmMixer.cold_ms);   // index 0 = RELAY1 (COLD)
+                } else if (warmMixer.phase == 2) {
+                    // Cold phase done → warm dispense complete
+                    warmMixer.active = false;
+                    RpiSerial.println("ESP:DONE:WARM");
+                }
+            } else {
+                // Normal single-relay completion
+                FlowSensor& fs = flowByIndex(i);
+                RpiSerial.printf("ESP:DONE:%s\n", t.label);
+                RpiSerial.printf("ESP:FLOW%u:%.3f\n", i + 1, fs.readFlowRate());
+                RpiSerial.printf("ESP:VOL%u:%.1f\n",  i + 1, fs.getTotalVolume());
+            }
         }
     }
 

@@ -48,5 +48,4 @@ class ServicesPage(BasePage):
 
     def _select_fountain(self) -> None:
         self.app_state.selection.service = "Fountain"
-        self.app_state.selection.temperature = ""
-        self.controller.show_page("volume")
+        self.controller.show_page("temperature")
