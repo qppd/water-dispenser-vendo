@@ -24,9 +24,19 @@
 #include "FLOW_SENSOR.h"
 #include "DS18B20_SENSOR.h"
 
+// ── USB_TEST_MODE ────────────────────────────────────────────────────────────
+// Uncomment the line below to route all RPi (Serial2) traffic over USB instead.
+// Both ESPs are connected to the laptop via USB cable during bench testing.
+// Comment it out again before deploying to the actual hardware.
+#define USB_TEST_MODE
+
 // ── UART2 ─────────────────────────────────────────────────────────────────────
 #define SERIAL2_BAUD 115200
-HardwareSerial RpiSerial(2);
+#ifndef USB_TEST_MODE
+  HardwareSerial RpiSerial(2);
+#else
+  #define RpiSerial Serial  // redirect Serial2 → USB for laptop testing
+#endif
 
 // ── Sensor instances ──────────────────────────────────────────────────────────
 FlowSensor    flow1, flow2, flow3;
@@ -192,7 +202,9 @@ static void handleRpiCommand(const String& msg) {
 // ── Setup ─────────────────────────────────────────────────────────────────────
 void setup() {
     Serial.begin(115200);
+#ifndef USB_TEST_MODE
     RpiSerial.begin(SERIAL2_BAUD, SERIAL_8N1, UART2_RX_PIN, UART2_TX_PIN);
+#endif
 
     initRELAY();
 
@@ -225,13 +237,16 @@ static bool          _tempConverting= false; // true while waiting for conversio
 // ── Loop ──────────────────────────────────────────────────────────────────────
 void loop() {
     // ── 1. USB Serial monitor commands (for debugging / testing) ─────────────
+    // Disabled in USB_TEST_MODE: Serial is shared with RPi protocol traffic.
+#ifndef USB_TEST_MODE
     if (Serial.available()) {
         String cmd = Serial.readStringUntil('\n');
         cmd.trim();
         if (cmd.length() > 0) handleSerialCommand(cmd);
     }
+#endif
 
-    // ── 2. UART2 inbound commands from Raspberry Pi ──────────────────────────
+    // ── 2. Inbound commands from Raspberry Pi (Serial2 or USB in test mode) ──
     if (RpiSerial.available()) {
         String msg = RpiSerial.readStringUntil('\n');
         msg.trim();

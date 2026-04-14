@@ -101,17 +101,17 @@ class MainApp(ctk.CTk):
         self.app_state = AppState()
 
         # ── Serial manager ────────────────────────────────────────────────────
-        port = "COM7" if not simulation_mode else None
+        port = "COM5" if not simulation_mode else None
         self.serial_mgr = SerialManager(
             event_queue=self.app_state.hw_event_queue,
             port=port,
         )
         self.serial_mgr.start()
 
-        # ── Second ESP32 (ESPWDV dispenser) via hardware UART ─────────────────
-        # RPi GPIO14/15 → /dev/serial0 @ 115200 baud
-        # Receives periodic temperature readings; sends relay/SSR commands.
-        second_port = "/dev/serial0" if not simulation_mode else None
+        # ── Second ESP32 (ESPWDV dispenser) via USB cable ─────────────────────
+        # USB_TEST_MODE is active in ESPWDV firmware; both ESPs connected to laptop.
+        # Change back to "/dev/serial0" (and disable USB_TEST_MODE) for RPi deploy.
+        second_port = "COM4" if not simulation_mode else None
         self.second_esp = SecondESPSerial(
             event_queue=self.app_state.hw_event_queue,  # share existing queue
             port=second_port,
