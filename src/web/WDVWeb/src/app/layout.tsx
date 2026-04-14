@@ -3,8 +3,8 @@ import { AuthProvider } from "@/context/AuthContext";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AquaSmart — Water Dispenser Dashboard",
-  description: "View your AquaSmart credit balance in real time.",
+  title: "ABC Splash — Water Dispenser Dashboard",
+  description: "View your ABC Splash credit balance in real time.",
 };
 
 export default function RootLayout({

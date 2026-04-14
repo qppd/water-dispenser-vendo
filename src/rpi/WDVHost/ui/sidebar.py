@@ -28,7 +28,7 @@ class Sidebar(ctk.CTkFrame):
         # ── App logo / title ─────────────────────────────────────────────────
         ctk.CTkLabel(
             self,
-            text="💧 AquaSmart",
+            text="💧 ABC Splash",
             font=ctk.CTkFont("Segoe UI", 16, "bold"),
             text_color=C["white"],
         ).grid(row=0, column=0, padx=10, pady=(20, 4), sticky="ew")

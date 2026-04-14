@@ -36,7 +36,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md rounded-2xl border-2 border-aqua bg-white p-8 shadow-lg">
         {/* ── Header ──────────────────────────────────────────────── */}
         <h1 className="mb-1 text-center text-2xl font-bold text-dark-blue">
-          💧 AquaSmart
+          💧 ABC Splash
         </h1>
         <p className="mb-6 text-center text-sm text-steel">
           Sign in with your kiosk email and password
@@ -102,7 +102,7 @@ export default function LoginPage() {
         <p className="mt-5 text-center text-sm text-steel">
           No account?{" "}
           <span className="font-semibold text-dark-blue">
-            Register at the AquaSmart kiosk.
+            Register at the ABC Splash kiosk.
           </span>
         </p>
       </div>

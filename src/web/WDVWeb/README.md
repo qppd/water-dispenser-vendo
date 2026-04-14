@@ -1,6 +1,6 @@
-# AquaSmart Web Dashboard (WDVWeb)
+# ABC Splash Web Dashboard (WDVWeb)
 
-A real-time web dashboard for AquaSmart water dispenser kiosk users to view their credit balance.
+A real-time web dashboard for ABC Splash water dispenser kiosk users to view their credit balance.
 
 ## Architecture
 

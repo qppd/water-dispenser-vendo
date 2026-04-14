@@ -1,5 +1,5 @@
 """
-firebase_config.py — Firebase client singletons for AquaSmart Kiosk.
+firebase_config.py — Firebase client singletons for ABC Splash Kiosk.
 
 Two clients are initialised here:
 

@@ -1,5 +1,5 @@
 """
-main.py - AquaSmart Kiosk entry point.
+main.py - ABC Splash Kiosk entry point.
 
 Architecture
 ============
@@ -88,7 +88,7 @@ class MainApp(ctk.CTk):
         self.simulation_mode = simulation_mode
 
         # ── Window setup ──────────────────────────────────────────────────────
-        self.title("AquaSmart Kiosk")
+        self.title("ABC Splash Kiosk")
         self.geometry(f"{WIN_W}x{WIN_H}")
         self.resizable(False, False)
         self.configure(fg_color=C["app_bg"])

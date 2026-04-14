@@ -1,12 +1,22 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import QRCode from "qrcode";
 import { useAuth } from "@/context/AuthContext";
 
 export default function DashboardPage() {
   const { firebaseUser, userProfile, loading, logout } = useAuth();
   const router = useRouter();
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+
+  useEffect(() => {
+    if (userProfile?.username) {
+      QRCode.toDataURL(`USER:${userProfile.username}`, { width: 120, margin: 1 })
+        .then(setQrDataUrl)
+        .catch(() => {});
+    }
+  }, [userProfile?.username]);
 
   useEffect(() => {
     if (!loading && !firebaseUser) {
@@ -40,7 +50,7 @@ export default function DashboardPage() {
           <p className="mb-1 text-sm text-steel">Signed in as:</p>
           <p className="mb-4 text-sm font-medium">{firebaseUser.email}</p>
           <p className="mb-6 text-sm text-steel">
-            Your email is not linked to any AquaSmart kiosk account yet.
+            Your email is not linked to any ABC Splash kiosk account yet.
             Please register at the kiosk first, then your balance will
             appear here automatically.
           </p>
@@ -61,7 +71,7 @@ export default function DashboardPage() {
       {/* ── Top bar ─────────────────────────────────────────────────── */}
       <div className="mb-8 flex w-full max-w-2xl items-center justify-between">
         <h1 className="text-2xl font-bold text-dark-blue">
-          💧 AquaSmart
+          💧 ABC Splash
         </h1>
         <button
           onClick={handleLogout}
@@ -73,14 +83,32 @@ export default function DashboardPage() {
 
       {/* ── Credit card ─────────────────────────────────────────────── */}
       <div className="mb-6 w-full max-w-2xl rounded-2xl bg-gradient-to-br from-dark-blue to-sidebar-bg p-8 text-white shadow-xl">
-        <p className="mb-1 text-sm opacity-80">Credit Balance</p>
-        <p className="text-6xl font-bold tracking-tight">
-          {userProfile.points}
-          <span className="ml-2 text-2xl font-normal opacity-70">pts</span>
-        </p>
-        <p className="mt-3 text-xs opacity-60">
-          Updated in real time from kiosk
-        </p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="mb-1 text-sm opacity-80">Credit Balance</p>
+            <p className="text-6xl font-bold tracking-tight">
+              {userProfile.points}
+              <span className="ml-2 text-2xl font-normal opacity-70">pts</span>
+            </p>
+            <p className="mt-3 text-xs opacity-60">
+              Updated in real time from kiosk
+            </p>
+          </div>
+          {qrDataUrl && (
+            <div className="flex shrink-0 flex-col items-center gap-2">
+              <div className="rounded-lg bg-white p-1">
+                <img src={qrDataUrl} alt="User QR Code" width={110} height={110} />
+              </div>
+              <a
+                href={qrDataUrl}
+                download={`${userProfile.username}-qr.png`}
+                className="rounded-md bg-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:bg-white/30"
+              >
+                Download
+              </a>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Account details ─────────────────────────────────────────── */}
