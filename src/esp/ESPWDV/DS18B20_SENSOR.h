@@ -23,9 +23,15 @@ public:
     uint8_t getDeviceCount();
 
 private:
-    uint8_t           _pin;
-    uint8_t           _deviceCount;
-    OneWire*          _oneWire;
+    uint8_t  _pin;
+    uint8_t  _deviceCount;
+    bool     _ready;   // true once begin() has constructed the objects
+
+    // Pre-allocated storage — avoids heap allocation and any malloc failure.
+    alignas(OneWire)           uint8_t _oneWireBuf[sizeof(OneWire)];
+    alignas(DallasTemperature) uint8_t _sensorsBuf[sizeof(DallasTemperature)];
+
+    OneWire*           _oneWire;
     DallasTemperature* _sensors;
 };
 

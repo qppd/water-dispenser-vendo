@@ -1,0 +1,3 @@
+○ wdv-kiosk.service - WDV Water Dispenser Kiosk
+     Loaded: loaded (]8;;file://raspberrypi/etc/systemd/system/wdv-kiosk.service\/etc/systemd/system/wdv-kiosk.service]8;;\; [0;1;38:5:185mdisabled[0m; preset: [0;1;32menabled[0m)
+     Active: inactive (dead)

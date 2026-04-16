@@ -8,6 +8,10 @@ from typing import Optional
 _COIN_RE  = re.compile(r"Coin accepted: P(\d+)")
 _BILL_RE  = re.compile(r"Bill accepted: P(\d+)")
 _DISP_RE  = re.compile(r"Dispensed water", re.IGNORECASE)
+_TEMP_RE  = re.compile(r"^TEMP:(HOT|WARM|COLD):([-\d.]+)$")
+_WATER_RE = re.compile(r"^ESP:WATER:([01])$")
+_WATER_LEVEL_RE = re.compile(r"^ESP:WATER_LEVEL:([01])$")
+_ESP_RE   = re.compile(r"^ESP:(\w+):(.+)$")
 
 
 class SerialManager:
@@ -78,14 +82,35 @@ class SerialManager:
                             self._parse(line)
                 except Exception as exc:
                     print(f"[SerialManager] Read error: {exc}")
+                    self._close_port()
+                    time.sleep(0.1)
+            elif self._port:
+                # Port configured but not open — attempt reconnect
+                self._try_reconnect()
             else:
-                # No serial connection – just idle
+                # Simulation mode (port=None) — just idle
                 time.sleep(0.1)
+
+    def _close_port(self) -> None:
+        try:
+            if self._ser and self._ser.is_open:
+                self._ser.close()
+        except Exception:
+            pass
+        self._ser = None
+
+    def _try_reconnect(self) -> None:
+        try:
+            import serial  # type: ignore
+            self._ser = serial.Serial(self._port, self._baud, timeout=0.5)
+            print(f"[SerialManager] Reconnected: {self._port} @ {self._baud}")
+        except Exception as exc:
+            print(f"[SerialManager] Reconnect failed ({self._port}): {exc}")
+            self._ser = None
+            time.sleep(2.0)
 
     def _parse(self, line: str) -> None:
         """Classify an ESP32 text line and put a typed event onto the queue."""
-        print(f"[ESP32] {line}")
-
         m = _COIN_RE.search(line)
         if m:
             self._q.put({"type": "coin", "value": int(m.group(1))})
@@ -98,6 +123,33 @@ class SerialManager:
 
         if _DISP_RE.search(line):
             self._q.put({"type": "dispense_complete"})
+            return
+
+        m = _TEMP_RE.match(line)
+        if m:
+            try:
+                self._q.put({"type": "temp", "sensor": m.group(1), "value": float(m.group(2))})
+            except ValueError:
+                pass
+            return
+
+        m = _WATER_RE.match(line)
+        if m:
+            self._q.put({"type": "water_level", "present": m.group(1) == "1"})
+            return
+
+        m = _WATER_LEVEL_RE.match(line)
+        if m:
+            self._q.put({"type": "water_level", "present": m.group(1) == "1"})
+            return
+
+        m = _ESP_RE.match(line)
+        if m:
+            cmd, value = m.group(1), m.group(2)
+            if cmd == "DONE":
+                self._q.put({"type": "dispense_complete"})
+            else:
+                self._q.put({"type": "esp_status", "cmd": cmd, "value": value})
             return
 
         # Pass raw lines through for debugging
@@ -113,9 +165,9 @@ class SerialManager:
         if self._ser and self._ser.is_open:
             try:
                 self._ser.write((cmd + "\r\n").encode("utf-8"))
-                print(f"[SerialManager] Sent: {cmd}")
             except Exception as exc:
                 print(f"[SerialManager] Send error: {exc}")
+                self._close_port()
         else:
             print(f"[SerialManager] (sim) Would send: {cmd}")
 
@@ -130,6 +182,30 @@ class SerialManager:
     def stop_flow(self) -> None:
         """Emergency stop – close all relays."""
         self.send_command("CMD:STOP")
+
+    def relay(self, relay_num: int, duration_ms: int) -> None:
+        """Open relay <relay_num> (1–3) on ESPWDV for <duration_ms> milliseconds."""
+        self.send_command(f"RPI:RELAY{relay_num}:{duration_ms}")
+
+    def set_inlet_valve(self, close: bool) -> None:
+        """Persistently control the water inlet solenoid valve (RELAY2).
+
+        close=True  → energize RELAY2 → close inlet valve (tank 100%, stop filling).
+        close=False → de-energize RELAY2 → open inlet valve (tank <100%, allow filling).
+        """
+        self.send_command(f"RPI:INLET:{'ON' if close else 'OFF'}")
+
+    def set_ssr(self, ssr_num: int, on: bool) -> None:
+        """Turn SSR <ssr_num> (1–3) on ESPWDV on or off."""
+        self.send_command(f"RPI:SSR{ssr_num}:{'ON' if on else 'OFF'}")
+
+    def stop_all(self) -> None:
+        """Emergency stop — close all relays on ESPWDV."""
+        self.send_command("RPI:STOP:0")
+
+    def query_water_level(self) -> None:
+        """Query the current water level from ESPWDV."""
+        self.send_command("RPI:WATER_LEVEL:0")
 
     # ── Enable / Disable controls ─────────────────────────────────────────────
 
@@ -171,7 +247,6 @@ class SerialManager:
         candidates = [
             "/dev/ttyUSB0", "/dev/ttyUSB1",
             "/dev/ttyACM0", "/dev/ttyACM1",
-            "/dev/serial0",
         ]
         for pattern in candidates:
             matches = glob.glob(pattern)

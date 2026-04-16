@@ -11,7 +11,7 @@
 
 extern volatile unsigned int pulseCount;
 extern unsigned int billCredit;
-extern unsigned long lastPulseTime;
+extern volatile unsigned long lastPulseTime;
 extern const unsigned long pulseDebounce;
 extern volatile int detectedBillValue;  // Value of the detected bill
 extern volatile bool billInserted;      // Flag set when at least one pulse is received

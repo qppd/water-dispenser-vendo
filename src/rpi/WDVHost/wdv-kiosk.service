@@ -1,0 +1,21 @@
+[Unit]
+Description=WDV Water Dispenser Kiosk
+# Start after the display manager has brought up the X session
+After=graphical.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+User=admin
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/admin/.Xauthority
+WorkingDirectory=/home/admin/water-dispenser-vendo/src/rpi/WDVHost
+ExecStartPre=/usr/bin/xset s off
+ExecStartPre=/usr/bin/xset -dpms
+ExecStartPre=/usr/bin/xset s noblank
+ExecStart=/usr/bin/python3 /home/admin/water-dispenser-vendo/src/rpi/WDVHost/main.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target

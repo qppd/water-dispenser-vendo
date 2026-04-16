@@ -73,36 +73,66 @@ class ESCPOSFormatter:
     def full_cut(self) -> bytes:
         return GS + b"V\x00"
 
-    # -- QR code (native GS ( k) -------------------------------------------
+    # -- QR code: raster bitmap (GS v 0) -----------------------------------
+    # Renders QR code via qrcode+Pillow then sends as ESC/POS raster image.
+    # Works on all thermal printers; no native GS(k support required.
     def qr_code(
         self,
         data: str,
-        size: int = 6,
-        error_correction: str = "M",
-        model: int = 2,
+        box_size: int = 16,
+        border: int = 2,
+        max_width: int = 384,
+        max_height: int = 200,
     ) -> bytes:
-        size = max(1, min(size, 16))
-        model_byte = 49 if model == 1 else 50
-        ec_map = {"L": 48, "M": 49, "Q": 50, "H": 51}
-        ec_byte = ec_map.get(error_correction.upper(), 49)
+        import qrcode  # type: ignore
+        from PIL import Image as PILImage  # type: ignore
 
-        data_bytes = data.encode("utf-8")
-        store_len = len(data_bytes) + 3
-        pL = store_len & 0xFF
-        pH = (store_len >> 8) & 0xFF
-
-        return (
-            # fn 0x41 (65): select QR model
-            GS + b"(k\x04\x00\x31\x41" + bytes([model_byte]) + b"\x00"
-            # fn 0x43 (67): set module (dot) size
-            + GS + b"(k\x03\x00\x31\x43" + bytes([size])
-            # fn 0x45 (69): set error correction level
-            + GS + b"(k\x03\x00\x31\x45" + bytes([ec_byte])
-            # fn 0x50 (80): store QR data in symbol storage area
-            + GS + b"(k" + bytes([pL, pH]) + b"\x31\x50\x30" + data_bytes
-            # fn 0x51 (81): print the stored QR symbol
-            + GS + b"(k\x03\x00\x31\x51\x30"
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=box_size,
+            border=border,
         )
+        qr.add_data(data)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white").convert("1")
+
+        w, h = img.size
+        if w > max_width:
+            scale = max_width / w
+            w, h = int(w * scale), int(h * scale)
+            img = img.resize((w, h), PILImage.LANCZOS)
+        if h > max_height:
+            scale = max_height / h
+            w, h = int(w * scale), int(h * scale)
+            img = img.resize((w, h), PILImage.LANCZOS)
+
+        # Pad width to a multiple of 8 for byte packing
+        row_bytes = (w + 7) // 8
+        padded_w = row_bytes * 8
+        if padded_w != w:
+            canvas = PILImage.new("1", (padded_w, h), 1)  # white=1 in mode "1"
+            canvas.paste(img, (0, 0))
+            img = canvas
+
+        pixels = img.load()
+        raster = bytearray()
+        for y in range(h):
+            for bx in range(row_bytes):
+                byte_val = 0
+                for bit in range(8):
+                    x = bx * 8 + bit
+                    # PIL mode "1": 0=black, 1(or 255)=white
+                    # ESC/POS GS v 0: bit 1=dot(black), 0=white
+                    if pixels[x, y] == 0:
+                        byte_val |= 0x80 >> bit
+                raster.append(byte_val)
+
+        xL = row_bytes & 0xFF
+        xH = (row_bytes >> 8) & 0xFF
+        yL = h & 0xFF
+        yH = (h >> 8) & 0xFF
+        # GS v 0: 0x1D 0x76 0x30  m  xL xH yL yH  <data>
+        return GS + b"\x76\x30\x00" + bytes([xL, xH, yL, yH]) + bytes(raster)
 
 
 # ── ThermalPrinter ────────────────────────────────────────────────────────────
@@ -132,10 +162,24 @@ class ThermalPrinter:
         self._lock = threading.Lock()
         self._connected = False
 
-        # /dev/usb/lp* are USB printer devices (not serial)
-        self._is_usb_device = bool(
-            port and port.startswith("/dev/usb/")
-        )
+        # Raw-file devices (not serial): /dev/usb/lp*, /dev/hidraw*, and
+        # symlinks that resolve to either of those paths.
+        self._is_usb_device = self._detect_raw_device(port)
+
+    @staticmethod
+    def _detect_raw_device(port: Optional[str]) -> bool:
+        """Return True if the port should be opened as a raw file, not serial."""
+        if not port:
+            return False
+        _RAW_PREFIXES = ("/dev/usb/", "/dev/hidraw")
+        if any(port.startswith(p) for p in _RAW_PREFIXES):
+            return True
+        # Resolve symlinks (e.g. /dev/thermal_printer → hidraw1)
+        try:
+            resolved = os.path.realpath(port)
+            return any(resolved.startswith(p) for p in _RAW_PREFIXES)
+        except OSError:
+            return False
 
     # ── Connection management ──────────────────────────────────────────────
 
@@ -147,7 +191,9 @@ class ThermalPrinter:
 
         try:
             if self._is_usb_device:
-                self._device_file = open(self._port, "wb")
+                # Verify device is accessible. Don't hold the descriptor open
+                # between jobs — LP drivers treat open()/close() as job boundaries.
+                open(self._port, "wb").close()
                 self._connected = True
                 logger.info("Printer connected (USB device): %s", self._port)
             else:
@@ -201,9 +247,10 @@ class ThermalPrinter:
         """Thread-safe write of raw ESC/POS bytes to the printer."""
         with self._lock:
             try:
-                if self._device_file:
-                    self._device_file.write(data)
-                    self._device_file.flush()
+                if self._is_usb_device and self._port:
+                    with open(self._port, "wb") as f:
+                        f.write(data)
+                        f.flush()
                     return True
                 if self._serial and self._serial.is_open:
                     self._serial.write(data)
@@ -309,6 +356,7 @@ class ThermalPrinter:
             return
 
         fmt = ESCPOSFormatter()
+        sep = "-" * 32
         try:
             job: bytes = (
                 fmt.initialize()
@@ -316,10 +364,10 @@ class ThermalPrinter:
                 + fmt.bold_on()
                 + fmt.text(header)
                 + fmt.bold_off()
+                + fmt.text(sep)
                 + fmt.text(subheader)
-                + fmt.feed(1)
-                + fmt.qr_code(data, size=6, error_correction="M")
-                + fmt.feed(1)
+                + fmt.qr_code(data)
+                + fmt.text(sep)
                 + fmt.text("Thank you!")
                 + fmt.feed(3)
                 + fmt.cut()
@@ -438,19 +486,57 @@ class ThermalPrinter:
 
     @staticmethod
     def _detect_linux() -> Optional[str]:
-        # USB printer class devices (no serial driver)
-        for pattern in ("/dev/usb/lp*",):
-            matches = sorted(glob.glob(pattern))
-            if matches:
-                logger.info("Auto-detected USB printer device: %s", matches[0])
-                return matches[0]
+        import subprocess
 
-        # USB-to-serial adapters
-        for pattern in ("/dev/ttyUSB*",):
-            matches = sorted(glob.glob(pattern))
-            if matches:
-                logger.info("Auto-detected serial printer: %s", matches[0])
-                return matches[0]
+        # 0. Permanent udev symlink (created by 99-thermal-printer.rules) — highest priority
+        if os.path.exists("/dev/thermal_printer"):
+            logger.info("Auto-detected printer via udev symlink: /dev/thermal_printer")
+            return "/dev/thermal_printer"
+
+        # 1a. hidraw devices (USB HID printers — raw byte writes)
+        hidraw_matches = sorted(glob.glob("/dev/hidraw*"))
+        if hidraw_matches:
+            logger.info("Auto-detected hidraw printer device: %s", hidraw_matches[0])
+            return hidraw_matches[0]
+
+        # 1b. USB printer class devices (no serial driver)
+        lp_matches = sorted(glob.glob("/dev/usb/lp*"))
+        if lp_matches:
+            logger.info("Auto-detected USB printer device: %s", lp_matches[0])
+            return lp_matches[0]
+
+        # 2. USB-to-serial: identify printer by sysfs VID, skip ESP32 adapters
+        #    CH340/CH341 = 0x1a86, CP210x = 0x10c4, FT232 = 0x0403
+        ESP_VIDS = {"1a86", "10c4", "0403"}
+        for dev in sorted(glob.glob("/dev/ttyUSB*")):
+            idx = dev.replace("/dev/ttyUSB", "")
+            vid_path = f"/sys/bus/usb-serial/devices/ttyUSB{idx}/../../../idVendor"
+            try:
+                with open(vid_path) as fh:
+                    vid = fh.read().strip().lower()
+                if vid not in ESP_VIDS:
+                    logger.info(
+                        "Auto-detected printer via sysfs VID %s: %s", vid, dev
+                    )
+                    return dev
+            except OSError:
+                pass
+
+        # 3. Fallback: use lsusb to confirm USB devices are present, then return
+        #    the first ttyUSB* that is not ttyUSB0 (reserved for ESPWDVAcceptor)
+        ttyusb_all = sorted(glob.glob("/dev/ttyUSB*"))
+        if ttyusb_all:
+            try:
+                subprocess.check_call(
+                    ["lsusb"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    timeout=3,
+                )
+            except Exception:
+                pass
+            for dev in ttyusb_all:
+                if dev != "/dev/ttyUSB0":
+                    logger.info("Auto-detected printer (lsusb fallback): %s", dev)
+                    return dev
 
         logger.info("No printer device detected on Linux.")
         return None

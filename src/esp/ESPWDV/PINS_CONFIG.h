@@ -14,15 +14,14 @@
 // ── Flow Sensors (input-only GPIOs, external pull-up required) ────────────────
 #define FLOW_SENSOR1_PIN 39
 #define FLOW_SENSOR2_PIN 34
-#define FLOW_SENSOR3_PIN 35
+
+// ── Water Level Sensor (input-only GPIO 35, external pull-down required) ──────
+// S8050 NPN transistor output: HIGH = water present, LOW = no water.
+#define WATER_LEVEL_SENSOR_PIN 35
 
 // ── DS18B20 OneWire Temperature Sensors (one pin each) ───────────────────────
 #define DS18B20_1_PIN 23
 #define DS18B20_2_PIN 22
 #define DS18B20_3_PIN 21
-
-// ── UART2  —  ESP32 ↔ Raspberry Pi 4 ─────────────────────────────────────────
-#define UART2_TX_PIN 17
-#define UART2_RX_PIN 16
 
 #endif // PINS_CONFIG_H

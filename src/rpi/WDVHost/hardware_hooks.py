@@ -51,35 +51,31 @@ def start_dispense(
     service     : "Dispense" (bottle) | "Fountain"
     temperature : "Cold" | "Warm" | "Hot"  — selects the relay
     volume_ml   : target volume in mL
-    serial_mgr  : first ESP32 serial manager (bill/coin acceptor)
-    second_esp  : second ESP32 serial manager (ESPWDV dispenser)
+    serial_mgr  : serial manager (ESPWDVAcceptor) — relay commands forwarded
+                  via ESP-Now to ESPWDV
+    second_esp  : unused (kept for signature compatibility)
 
     Returns
     -------
     Expected dispense duration in milliseconds.
     """
-    # Look up the exact relay duration for this volume (100/250/500/1000 ml).
-    # Falls back to a dynamic calculation for any unlisted volume.
     duration_ms = ML_TO_MS.get(
         volume_ml,
-        max(1, round(volume_ml * 60_000 / 1_750)),
+        max(1, round(volume_ml * 60_000 / 1_500)),
     )
 
     if temperature == "Warm":
-        # Sequential mixing: ESP32 opens R3 (hot) then R1 (cold) in ratio 44/56.
-        # Send a single RPI:WARM:<total_ms> command; ESP32 handles the phasing.
-        second_esp.send_command(f"RPI:WARM:{duration_ms}")
+        serial_mgr.send_command(f"RPI:WARM:{duration_ms}")
     else:
-        # Route to the correct relay: Cold→R1, Hot→R3
         relay_num = _TEMP_TO_RELAY.get(temperature, 1)
-        second_esp.relay(relay_num, duration_ms)
+        serial_mgr.relay(relay_num, duration_ms)
 
     return duration_ms
 
 
 def stop_dispense(serial_mgr: "SerialManager", second_esp: "SecondESPSerial") -> None:
     """Emergency stop for all relays on the ESPWDV."""
-    second_esp.stop_all()
+    serial_mgr.stop_all()
 
 
 def scan_qr(serial_mgr: "SerialManager") -> None:
@@ -101,11 +97,10 @@ def print_qr(username: str, serial_mgr: "SerialManager", printer: "ThermalPrinte
     is available.
     """
     if printer and printer.is_connected():
-        qr_data = f"USER:{username}"
         printer.print_qr(
-            data=qr_data,
-            header="AQUA SPLASH",
-            subheader=f"User: {username}",
+            data=username,
+            header="ABC Splash",
+            subheader="Scan QR Code",
         )
     else:
         serial_mgr.send_command(f"CMD:PRINT_QR:{username}")

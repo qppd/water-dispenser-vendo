@@ -15,7 +15,7 @@ extern volatile unsigned long coinLastDebounceTime;
 extern const unsigned long coinDebounceDelay;
 extern volatile unsigned int coinPulseCount;
 extern unsigned int coinCredit;
-extern unsigned long lastCoinPulseTime;
+extern volatile unsigned long lastCoinPulseTime;
 extern volatile bool coinEnabled; // Enable/disable flag for coin slot
 
 void IRAM_ATTR ITRCOIN();

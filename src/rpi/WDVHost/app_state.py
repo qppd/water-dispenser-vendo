@@ -26,9 +26,9 @@ REGISTERED_RATES = {1: 1, 5: 6, 10: 13, 20: 25, 50: 60, 100: 115}
 # Accepted cash denominations
 CASH_VALUES = [1, 5, 10, 20, 50, 100]
 
-# Relay open duration (ms) per ml — based on ~1.75 L/min pump flow rate
-# Formula: ms = round(volume_ml * 60_000 / 1_750)
-ML_TO_MS = {100: 3429, 250: 8571, 500: 17143, 1000: 34286}
+# Relay open duration (ms) per ml — based on ~1.5 L/min pump flow rate
+# Formula: ms = round(volume_ml * 60_000 / 1_500)
+ML_TO_MS = {100: 4000, 250: 10000, 500: 20000, 1000: 40000}
 
 # Activation fee in pesos
 ACTIVATION_FEE = 10
@@ -133,12 +133,17 @@ class AppState:
         # Values are float °C, or None until the first reading arrives.
         self.temperatures: dict = {"HOT": None, "WARM": None, "COLD": None}
 
+        # Water-level reading from ESPWDV (updated every ~2 s).
+        # True = water present, False = tank low/empty, None = not yet received.
+        self.water_level_present: Optional[bool] = None
+
         # Optional callbacks registered by the active page
         self._on_coin: Optional[Callable[[int], None]] = None
         self._on_bill: Optional[Callable[[int], None]] = None
         self._on_dispense_complete: Optional[Callable[[], None]] = None
         self._on_qr_scanned: Optional[Callable[[str], None]] = None
         self._on_temperature_update: Optional[Callable[[], None]] = None
+        self._on_water_level_update: Optional[Callable[[bool], None]] = None
 
     # ── User helpers ──────────────────────────────────────────────────────────
 
@@ -255,6 +260,7 @@ class AppState:
         self._on_dispense_complete = None
         self._on_qr_scanned = None
         self._on_temperature_update = None
+        self._on_water_level_update = None
 
     def dispatch_coin(self, value: int) -> None:
         if self._on_coin:
@@ -285,3 +291,16 @@ class AppState:
         self, cb: Optional[Callable[[], None]]
     ) -> None:
         self._on_temperature_update = cb
+
+    # ── Water-level helpers ───────────────────────────────────────────────────
+
+    def update_water_level(self, present: bool) -> None:
+        """Store the latest water-level reading and fire the update callback."""
+        self.water_level_present = present
+        if self._on_water_level_update:
+            self._on_water_level_update(present)
+
+    def register_water_level_callback(
+        self, cb: Optional[Callable[[bool], None]]
+    ) -> None:
+        self._on_water_level_update = cb

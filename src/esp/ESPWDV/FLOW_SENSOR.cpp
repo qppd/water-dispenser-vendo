@@ -4,9 +4,10 @@
 static FlowSensor* _sensorInstances[3] = { nullptr, nullptr, nullptr };
 static uint8_t     _sensorCount = 0;
 
-static void IRAM_ATTR _isr0() { _sensorInstances[0]->_pulseCount++; }
-static void IRAM_ATTR _isr1() { _sensorInstances[1]->_pulseCount++; }
-static void IRAM_ATTR _isr2() { _sensorInstances[2]->_pulseCount++; }
+// C++17 deprecates ++ and += on volatile types; use explicit read-then-write.
+static void IRAM_ATTR _isr0() { if (_sensorInstances[0]) _sensorInstances[0]->_pulseCount = _sensorInstances[0]->_pulseCount + 1; }
+static void IRAM_ATTR _isr1() { if (_sensorInstances[1]) _sensorInstances[1]->_pulseCount = _sensorInstances[1]->_pulseCount + 1; }
+static void IRAM_ATTR _isr2() { if (_sensorInstances[2]) _sensorInstances[2]->_pulseCount = _sensorInstances[2]->_pulseCount + 1; }
 
 typedef void (*IsrFn)();
 static const IsrFn ISR_TABLE[3] = { _isr0, _isr1, _isr2 };

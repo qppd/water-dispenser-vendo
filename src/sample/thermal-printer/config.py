@@ -15,16 +15,14 @@ _SYSTEM = platform.system()   # "Windows" | "Linux" | "Darwin"
 # ---------------------------------------------------------------------------
 # Printer connection
 # ---------------------------------------------------------------------------
-# Serial port for the Bluetooth printer.
+# Serial port for the thermal printer.
 #
-#   Windows  – check Device Manager ▶ Ports (COM & LPT).
-#              Typical values: "COM5", "COM6"
-#
-#   Linux/RPi – bind the printer first with rfcomm, then use:
-#              "/dev/rfcomm0", "/dev/rfcomm1"
+#   USB printer class (usblp) — Winbond 0416:5011 Virtual Com Port.
+#   A permanent udev symlink is created by /etc/udev/rules.d/99-thermal-printer.rules.
+#   Windows: check Device Manager ▶ Ports. Typical values: "COM5", "COM6"
 #
 # Set to "auto" to let the program scan and pick the first available port.
-PRINTER_PORT: str = "COM5" if _SYSTEM == "Windows" else "/dev/rfcomm0"
+PRINTER_PORT: str = "COM5" if _SYSTEM == "Windows" else "/dev/thermal_printer"
 
 # Baud rate – POS-5805DD default is 9600.
 BAUDRATE: int = 9600

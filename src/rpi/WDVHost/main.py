@@ -93,28 +93,30 @@ class MainApp(ctk.CTk):
         self.resizable(False, False)
         self.configure(fg_color=C["app_bg"])
 
-        # On Raspberry Pi touchscreen, uncomment:
-        # self.attributes("-fullscreen", True)
-        # self.config(cursor="none")
+        # Fullscreen kiosk mode
+        self.attributes("-fullscreen", True)
+        self.config(cursor="none")
+        # Allow Escape to exit (remove or comment out for production lockdown)
+        self.bind("<Escape>", lambda _e: self._on_close())
 
         # ── Shared state ──────────────────────────────────────────────────────
         self.app_state = AppState()
 
         # ── Serial manager ────────────────────────────────────────────────────
-        port = "COM5" if not simulation_mode else None
+        from config import ESP_ACCEPTOR_PORT as _ESP_PORT  # noqa: E402
+        port = _ESP_PORT if not simulation_mode else None
         self.serial_mgr = SerialManager(
             event_queue=self.app_state.hw_event_queue,
             port=port,
         )
         self.serial_mgr.start()
 
-        # ── Second ESP32 (ESPWDV dispenser) via USB cable ─────────────────────
-        # USB_TEST_MODE is active in ESPWDV firmware; both ESPs connected to laptop.
-        # Change back to "/dev/serial0" (and disable USB_TEST_MODE) for RPi deploy.
-        second_port = "COM4" if not simulation_mode else None
+        # ── Second ESP32 (ESPWDV) now communicates via ESP-Now through ────────
+        # ESPWDVAcceptor. All dispenser commands go through serial_mgr above.
+        # SecondESPSerial is kept in simulation mode (port=None) for compatibility.
         self.second_esp = SecondESPSerial(
-            event_queue=self.app_state.hw_event_queue,  # share existing queue
-            port=second_port,
+            event_queue=self.app_state.hw_event_queue,
+            port=None,
         )
         self.second_esp.start()
 
@@ -246,7 +248,10 @@ class MainApp(ctk.CTk):
             f"Temperature:   {temp}\n"
             f"Volume:        {sel.volume_ml} ml\n"
             f"Cost:          {sel.cost_pts} pt{'s' if sel.cost_pts != 1 else ''}\n\n"
-            f"Balance after: {self.app_state.user.points - sel.cost_pts} pts"
+            f"Balance after: {self.app_state.user.points - sel.cost_pts} pts\n\n"
+            f"💡 Tip: Want to drink directly from the faucet?\n"
+            f"   Attach the drinking fountain adapter to the\n"
+            f"   tip of the faucet before confirming."
         )
         self.show_alert(
             "Confirm Order",
@@ -276,9 +281,10 @@ class MainApp(ctk.CTk):
         dlg.title(title)
         dlg.resizable(False, False)
         dlg.transient(self)
+        dlg.update_idletasks()
         dlg.grab_set()
 
-        dlg_w, dlg_h = 380, 230
+        dlg_w, dlg_h = 420, 320
         x = self.winfo_x() + (WIN_W  - dlg_w) // 2
         y = self.winfo_y() + (WIN_H - dlg_h) // 2
         dlg.geometry(f"{dlg_w}x{dlg_h}+{x}+{y}")
@@ -369,6 +375,14 @@ class MainApp(ctk.CTk):
                     event.get("sensor", ""), event.get("value", 0.0)
                 )
                 self.sidebar.refresh_temps()
+            elif etype == "water_level":
+                present = event.get("present", False)
+                self.app_state.update_water_level(present)
+                self.sidebar.refresh_water_level()
+                # Auto-control inlet solenoid valve (RELAY2):
+                # Tank full (100%, present=True)  → close inlet valve (stop filling).
+                # Tank not full (50%, present=False) → open inlet valve (allow filling).
+                self.serial_mgr.set_inlet_valve(close=present)
             # "raw" / "esp_status" lines are silently ignored here
 
         self.after(50, self._poll_hw_events)

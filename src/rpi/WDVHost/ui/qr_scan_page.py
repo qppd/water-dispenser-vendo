@@ -79,6 +79,9 @@ class QRScanPage(BasePage):
     def on_show(self) -> None:
         self._got_scan = False
 
+        # Grab keyboard focus so USB HID scanner keystrokes are captured
+        self.controller.focus_force()
+
         # Send trigger to ESP32-attached QR reader (if any)
         hardware_hooks.scan_qr(self.controller.serial_mgr)
 

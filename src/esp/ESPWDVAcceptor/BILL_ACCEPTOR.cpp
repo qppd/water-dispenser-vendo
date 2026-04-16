@@ -2,7 +2,7 @@
 
 volatile unsigned int pulseCount = 0;
 unsigned int billCredit = 0;
-unsigned long lastPulseTime = 0;
+volatile unsigned long lastPulseTime = 0;
 const unsigned long pulseDebounce = 70; // ms debounce (TB-74 pulses are 100ms apart)
 volatile int detectedBillValue = 0;  // Current detected bill value
 volatile bool billInserted = false;  // True once first pulse of a bill is received

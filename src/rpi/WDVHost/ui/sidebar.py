@@ -148,6 +148,37 @@ class Sidebar(ctk.CTkFrame):
         )
         self._lbl_temp_cold.grid(row=3, column=1, padx=(2, 8), pady=(2, 6), sticky="e")
 
+        # ── Water level card ──────────────────────────────────────────────────
+        wl_card = ctk.CTkFrame(self, fg_color="#0d3a5c", corner_radius=8)
+        wl_card.grid(row=6, column=0, padx=10, pady=(0, 6), sticky="ew")
+        wl_card.columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            wl_card,
+            text="💧 TANK LEVEL",
+            font=ctk.CTkFont("Segoe UI", 8, "bold"),
+            text_color="#b3e5fc",
+        ).grid(row=0, column=0, padx=6, pady=(6, 2))
+
+        self._wl_bar = ctk.CTkProgressBar(
+            wl_card,
+            orientation="horizontal",
+            height=10,
+            corner_radius=5,
+            progress_color="#4fc3f7",
+            fg_color="#1d4570",
+        )
+        self._wl_bar.set(0.5)
+        self._wl_bar.grid(row=1, column=0, padx=8, pady=(0, 2), sticky="ew")
+
+        self._lbl_wl = ctk.CTkLabel(
+            wl_card,
+            text="--",
+            font=ctk.CTkFont("Segoe UI", 11, "bold"),
+            text_color="#b3e5fc",
+        )
+        self._lbl_wl.grid(row=2, column=0, padx=6, pady=(0, 6))
+
         # ── Logout button ─────────────────────────────────────────────────────
         ctk.CTkButton(
             self,
@@ -159,7 +190,7 @@ class Sidebar(ctk.CTkFrame):
             height=44,
             corner_radius=BTN_CORNER,
             font=ctk.CTkFont("Segoe UI", 13, "bold"),
-        ).grid(row=6, column=0, padx=10, pady=(0, 20), sticky="ew")
+        ).grid(row=7, column=0, padx=10, pady=(0, 20), sticky="ew")
 
     # ── Public ────────────────────────────────────────────────────────────────
 
@@ -180,6 +211,22 @@ class Sidebar(ctk.CTkFrame):
         self._lbl_temp_hot.configure(text=_fmt(temps.get("HOT")))
         self._lbl_temp_warm.configure(text=_fmt(temps.get("WARM")))
         self._lbl_temp_cold.configure(text=_fmt(temps.get("COLD")))
+
+    def refresh_water_level(self) -> None:
+        """Update the tank level bar and label from app_state.water_level_present."""
+        present = self.app_state.water_level_present
+        if present is None:
+            self._wl_bar.set(0.5)
+            self._wl_bar.configure(progress_color="#78909c")
+            self._lbl_wl.configure(text="-- (waiting...)", text_color="#b3e5fc")
+        elif present:
+            self._wl_bar.set(1.0)
+            self._wl_bar.configure(progress_color="#4fc3f7")
+            self._lbl_wl.configure(text="100%  \u2713 FULL", text_color="#4fc3f7")
+        else:
+            self._wl_bar.set(0.5)
+            self._wl_bar.configure(progress_color="#ffb300")
+            self._lbl_wl.configure(text="50%  \u26a0 FILLING", text_color="#ffb300")
 
     # ── Private ───────────────────────────────────────────────────────────────
 

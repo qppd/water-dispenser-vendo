@@ -48,6 +48,19 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _is_raw_device(port: str) -> bool:
+    """Return True if port should be written as a raw file (hidraw / USB lp)."""
+    _RAW_PREFIXES = ("/dev/usb/", "/dev/hidraw")
+    if any(port.startswith(p) for p in _RAW_PREFIXES):
+        return True
+    try:
+        import os
+        resolved = os.path.realpath(port)
+        return any(resolved.startswith(p) for p in _RAW_PREFIXES)
+    except OSError:
+        return False
+
+
 def _resolve_port() -> str:
     """
     Determine which serial port to use, in priority order:
@@ -86,8 +99,40 @@ def main() -> None:
     logger.info("="*52)
 
     port = _resolve_port()
-
     logger.info("Connecting to printer on %s …", port)
+
+    # ── Raw USB HID / lp device (no serial driver) ────────────────────────────
+    if _is_raw_device(port):
+        logger.info("Detected raw USB device – using direct file write.")
+        from printer_qr import ESCPOSFormatter
+        fmt = ESCPOSFormatter()
+        sep = "-" * 32
+        job: bytes = (
+            fmt.initialize()
+            + fmt.align_center()
+            + fmt.bold_on()
+            + fmt.text(HEADER_TEXT)
+            + fmt.bold_off()
+            + fmt.text(sep)
+            + fmt.text(SUBHEADER_TEXT)
+            + fmt.qr_code(QR_DATA, size=QR_BOX_SIZE, error_correction=QR_ERROR_CORRECTION)
+            + fmt.text(sep)
+            + fmt.text(FOOTER_TEXT)
+            + fmt.feed(3)
+            + fmt.cut()
+        )
+        try:
+            with open(port, "wb") as f:
+                f.write(job)
+                f.flush()
+            logger.info("Done!  Check your printer output.")
+        except Exception as exc:
+            logger.error("Print failed: %s", exc)
+            sys.exit(1)
+        return
+
+    # ── Bluetooth / RFCOMM / serial path ─────────────────────────────────────
+    logger.info("Using Bluetooth/serial transport.")
     with BluetoothPrinter(port, BAUDRATE) as printer:
 
         if not printer.is_connected():

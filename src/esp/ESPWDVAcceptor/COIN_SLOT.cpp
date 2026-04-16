@@ -5,7 +5,7 @@ volatile unsigned long coinLastDebounceTime = 0;
 const unsigned long coinDebounceDelay = 50; // debounce delay in ms
 volatile unsigned int coinPulseCount = 0;
 unsigned int coinCredit = 0;
-unsigned long lastCoinPulseTime = 0;
+volatile unsigned long lastCoinPulseTime = 0;
 volatile bool coinEnabled = true; // enabled by default
 
 void IRAM_ATTR ITRCOIN() {

@@ -1,0 +1,8 @@
+# ~/.config/lxsession/LXDE-pi/autostart
+# Kiosk override — replaces the default LXDE autostart.
+# The panel and file manager are intentionally omitted so the kiosk
+# is the only thing visible after login.
+#
+# To restore normal desktop, rename or delete this file.
+
+@/home/admin/water-dispenser-vendo/src/rpi/WDVHost/start-kiosk.sh

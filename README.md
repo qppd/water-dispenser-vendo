@@ -395,6 +395,9 @@ The system integrates ESP32 firmware with Raspberry Pi host software through ser
 
 ### Testing Procedures
 - **Unit Testing**: Test individual hardware components
+  - Water Level Sensor: Run `python test_water_level.py /dev/ttyUSB0` (replace with actual port)
+  - Flow Sensors: Use `FLOW1` or `FLOW2` commands in ESP32 serial monitor
+  - Temperature Sensors: Use `TEMP` command in ESP32 serial monitor
 - **Integration Testing**: Verify ESP32-Raspberry Pi communication
 - **System Testing**: End-to-end testing with actual currency
 

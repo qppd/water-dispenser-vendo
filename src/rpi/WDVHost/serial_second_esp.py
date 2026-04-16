@@ -1,27 +1,12 @@
 """
 serial_second_esp.py — SecondESPSerial
 
-Manages the hardware UART connection to ESPWDV (water dispenser ESP32).
+NOTE: ESPWDV now communicates via ESP-Now with ESPWDVAcceptor.
+All dispenser commands are sent through SerialManager (/dev/ttyUSB0 →
+ESPWDVAcceptor → ESP-Now → ESPWDV).  This class is kept for compatibility
+but runs in simulation mode (port=None) by default.
 
-Hardware wiring:
-    RPi GPIO14 (TXD, Pin 8)  → ESP32 GPIO16 (RX, UART2)
-    RPi GPIO15 (RXD, Pin 10) ← ESP32 GPIO17 (TX, UART2)
-    Port:  /dev/serial0
-    Baud:  115200
-
-Protocol (ESP32 → RPi):
-    TEMP:HOT:<value>      periodic temperature reading (°C)
-    TEMP:WARM:<value>     periodic temperature reading (°C)
-    TEMP:COLD:<value>     periodic temperature reading (°C)
-    ESP:<CMD>:<VALUE>     status / completion messages
-        ESP:STATUS:READY  — sent on ESP32 boot
-        ESP:DONE:RELAY1   — relay closed after dispense
-        ESP:FLOW1:<rate>  — flow rate in L/min
-        ESP:VOL1:<vol>    — total volume in mL
-        ESP:SSR1:ON|OFF   — SSR state acknowledgment
-        ESP:STOP:OK       — emergency stop confirmed
-
-Protocol (RPi → ESP32):
+Protocol (RPi → ESPWDVAcceptor → ESP-Now → ESPWDV):
     RPI:<CMD>:<VALUE>
         RPI:RELAY1:<ms>   open relay 1 for <ms> milliseconds
         RPI:RELAY2:<ms>   open relay 2 for <ms> milliseconds
@@ -31,7 +16,7 @@ Protocol (RPi → ESP32):
         RPI:SSR3:ON|OFF   control cooler SSR3
         RPI:STOP:0        emergency stop — close all relays
 
-Events put onto event_queue (same hw_event_queue shared with SerialManager):
+Events on event_queue (forwarded by ESPWDVAcceptor via Serial):
     {"type": "temp",       "sensor": "HOT"|"WARM"|"COLD", "value": float}
     {"type": "esp_status", "cmd": str, "value": str}
     {"type": "raw",        "line": str}
@@ -56,8 +41,6 @@ _ESP_RE = re.compile(r"^ESP:(\w+):(.+)$")
 class SecondESPSerial:
     """
     Manages the serial connection to the ESPWDV (dispenser) ESP32
-    via hardware UART (/dev/serial0 on Raspberry Pi Zero W).
-
     Runs a background daemon thread for non-blocking serial reads.
     Events are placed onto the shared ``event_queue`` (same queue used
     by SerialManager so main.py has a single polling point).
@@ -68,7 +51,7 @@ class SecondESPSerial:
     def __init__(
         self,
         event_queue: queue.Queue,
-        port: Optional[str] = "/dev/serial0",
+        port: Optional[str] = None,
         baud: int = 115200,
     ) -> None:
         self._q       = event_queue
@@ -81,7 +64,7 @@ class SecondESPSerial:
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
     def start(self) -> None:
-        """Open /dev/serial0 (if available) and start background reader thread."""
+        """Open the serial port (if set) and start background reader thread."""
         if self._port:
             try:
                 import serial  # type: ignore

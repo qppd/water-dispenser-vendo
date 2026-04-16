@@ -3,44 +3,80 @@
  *
  * Hardware:
  *   SSR1 (GPIO32) → HEATER1    SSR2 (GPIO33) → HEATER2    SSR3 (GPIO25) → COOLER1
- *   RELAY1 (GPIO23) → Valve1+Pump1
- *   RELAY2 (GPIO22) → Valve2+Pump2
- *   RELAY3 (GPIO21) → Valve3+Pump3
- *   FLOW_SENSOR1 (GPIO39)   FLOW_SENSOR2 (GPIO34)   FLOW_SENSOR3 (GPIO35)
+ *   RELAY1 (GPIO19) → Valve19603
+ *   5390
+ *   8844
+ *   +Pump1
+ *   RELAY2 (GPIO18) → Valve2+Pump2
+ *   R5096
+ *   ELAY3 (GPIO5)  → Valve3+Pump3
+ *   FLOW_SENSOR1 (GPIO39)   FLOW_SENSOR2 (GPIO34)
+ *   WATER_LEVEL_SENSOR (GPIO35) — S8050 NPN digital output, HIGH = water present
  *   DS18B20 OneWire bus (GPIO4)
  *
- * Serial (USB):   115200 baud  —  debug / manual test commands
- * Serial2 (UART2): 115200 baud  —  ESP32 ↔ Raspberry Pi 4
- *   TX  GPIO17  →  RPi GPIO15 (Pin 10)
- *   RX  GPIO16  ←  RPi GPIO14 (Pin 8)
+ * Serial (USB):  115200 baud  —  debug / manual test commands only
  *
- * Protocol  (Serial2):
- *   Inbound  (RPi → ESP):  "RPI:<COMMAND>:<VALUE>\n"
- *   Outbound (ESP → RPi):  "ESP:<COMMAND>:<VALUE>\n"
+ * Communication: ESP-Now  —  ESPWDV ↔ ESPWDVAcceptor
+ *   All RPI: commands are received from ESPWDVAcceptor via ESP-Now.
+ *   All ESP: / TEMP: responses are sent to ESPWDVAcceptor via ESP-Now.
+ *
+ * Protocol  (ESP-Now):
+ *   Inbound  (Acceptor → Dispenser):  "RPI:<COMMAND>:<VALUE>"
+ *   Outbound (Dispenser → Acceptor):  "ESP:<COMMAND>:<VALUE>"
+ *                                     "TEMP:<SENSOR>:<VALUE>"
+ *
+ * To find the MAC address of ESPWDVAcceptor, flash it and run:
+ *   Serial.println(WiFi.macAddress());
+ * Then update ACCEPTOR_MAC below.
  */
 
+#include <WiFi.h>
+#include <esp_now.h>
 #include "PINS_CONFIG.h"
 #include "RELAY_CONFIG.h"
 #include "FLOW_SENSOR.h"
+#include "WATER_LEVEL_SENSOR.h"
 #include "DS18B20_SENSOR.h"
 
-// ── USB_TEST_MODE ────────────────────────────────────────────────────────────
-// Uncomment the line below to route all RPi (Serial2) traffic over USB instead.
-// Both ESPs are connected to the laptop via USB cable during bench testing.
-// Comment it out again before deploying to the actual hardware.
-#define USB_TEST_MODE
+// ── ESP-Now peer: ESPWDVAcceptor MAC address ──────────────────────────────────
+// Replace with the actual MAC address of your ESPWDVAcceptor.
+// Run: Serial.println(WiFi.macAddress()); on ESPWDVAcceptor to get it.
+static uint8_t acceptorMAC[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
 
-// ── UART2 ─────────────────────────────────────────────────────────────────────
-#define SERIAL2_BAUD 115200
-#ifndef USB_TEST_MODE
-  HardwareSerial RpiSerial(2);
-#else
-  #define RpiSerial Serial  // redirect Serial2 → USB for laptop testing
-#endif
+// ── ESP-Now helpers ───────────────────────────────────────────────────────────
+static void sendToAcceptor(const char* msg) {
+    size_t len = strlen(msg);
+    if (len > 250) len = 250;
+    esp_now_send(acceptorMAC, (const uint8_t*)msg, len);
+}
+
+// Forward-declare the RPI command handler so the recv callback can call it.
+static void handleRpiCommand(const String& msg);
 
 // ── Sensor instances ──────────────────────────────────────────────────────────
-FlowSensor    flow1, flow2, flow3;
-DS18B20Sensor temp1, temp2, temp3;
+FlowSensor       flow1, flow2;
+WaterLevelSensor waterLevel;
+DS18B20Sensor    temp1, temp2, temp3;
+
+// ── Water-level broadcast state ──────────────────────────────────────────────
+static bool          _lastWaterLevel   = false;
+static unsigned long _waterLevelSendMs = 0;
+#define WATER_LEVEL_BROADCAST_INTERVAL_MS 2000UL
+
+// ── ESP-Now receive callback ─────────────────────────────────────────────────
+// Called when ESPWDVAcceptor forwards an RPI: command to this node.
+// Signature matches ESP32 Arduino core 3.x (IDF v5): first arg is recv_info.
+static void onDataRecv(const esp_now_recv_info_t* recv_info, const uint8_t* data, int len) {
+    if (len <= 0 || len > 250) return;
+    char buf[251];
+    memcpy(buf, data, len);
+    buf[len] = '\0';
+    String msg(buf);
+    msg.trim();
+    if (msg.length() > 0) {
+        handleRpiCommand(msg);
+    }
+}
 
 // ── Non-blocking relay timer state ───────────────────────────────────────────
 struct RelayTimer {
@@ -90,10 +126,11 @@ static void startRelay(uint8_t idx, unsigned long durationMs) {
     relayTimers[idx].durationMs = durationMs;
 }
 
+// Relay 3 (idx 2) used to share GPIO35 with flow3; GPIO35 is now the water-level
+// sensor, so relay 3 no longer has a dedicated flow sensor.
 static FlowSensor& flowByIndex(uint8_t idx) {
     if (idx == 1) return flow2;
-    if (idx == 2) return flow3;
-    return flow1;
+    return flow1;   // idx 0, or idx 2 fallback (relay3 has no dedicated flow sensor)
 }
 
 // ── Serial monitor (USB) command parser ──────────────────────────────────────
@@ -121,9 +158,26 @@ static void handleSerialCommand(const String& cmd) {
         Serial.printf("FLOW2: %.3f L/min | Total: %.1f mL\n",
                       flow2.readFlowRate(), flow2.getTotalVolume());
     }
-    else if (cmd == "FLOW3") {
-        Serial.printf("FLOW3: %.3f L/min | Total: %.1f mL\n",
-                      flow3.readFlowRate(), flow3.getTotalVolume());
+    else if (cmd == "WATER_LEVEL") {
+        Serial.printf("WATER_LEVEL: %s (raw: %d)\n",
+                      waterLevel.isWaterPresent() ? "PRESENT" : "LOW",
+                      waterLevel.rawRead());
+    }
+    // Flow accumulator reset
+    else if (cmd == "FLOW1 RESET") { flow1.reset(); Serial.println("FLOW1 reset"); }
+    else if (cmd == "FLOW2 RESET") { flow2.reset(); Serial.println("FLOW2 reset"); }
+    // Print WiFi MAC address (needed to configure ESP-Now peer on ESPWDVAcceptor)
+    else if (cmd == "MAC") {
+        Serial.print("ESPWDV MAC: ");
+        Serial.println(WiFi.macAddress());
+    }
+    // Forward any RPI: protocol command from the serial monitor directly to the
+    // RPI command handler — useful for testing dispensing without the RPi.
+    // Examples:  RPI:RELAY1:5000   RPI:WARM:17143   RPI:STOP:0
+    else if (cmd.startsWith("RPI:")) {
+        handleRpiCommand(cmd);
+        Serial.print("[SER→RPI] ");
+        Serial.println(cmd);
     }
     // Temperature reading (debug: blocking wait acceptable on USB monitor)
     else if (cmd == "TEMP") {
@@ -148,8 +202,9 @@ static void handleSerialCommand(const String& cmd) {
                       flow1.readFlowRate(), flow1.getTotalVolume());
         Serial.printf("FLOW2: %.3f L/min | Total: %.1f mL\n",
                       flow2.readFlowRate(), flow2.getTotalVolume());
-        Serial.printf("FLOW3: %.3f L/min | Total: %.1f mL\n",
-                      flow3.readFlowRate(), flow3.getTotalVolume());
+        Serial.printf("WATER_LEVEL: %s (raw: %d)\n",
+                      waterLevel.isWaterPresent() ? "PRESENT" : "LOW",
+                      waterLevel.rawRead());
         temp1.requestTemperature();
         temp2.requestTemperature();
         temp3.requestTemperature();
@@ -162,11 +217,21 @@ static void handleSerialCommand(const String& cmd) {
     else {
         Serial.print("Unknown command: ");
         Serial.println(cmd);
-        Serial.println("Commands: SSR1/2/3 ON|OFF | R1/2/3 ON|OFF | FLOW1/2/3 | TEMP | STATUS");
+        Serial.println("Commands:");
+        Serial.println("  SSR1/2/3 ON|OFF          — heater / cooler SSR control");
+        Serial.println("  R1/2/3 ON|OFF            — relay open / close (no timer)");
+        Serial.println("  FLOW1|FLOW2              — read flow rate and volume");
+        Serial.println("  FLOW1 RESET|FLOW2 RESET  — zero flow accumulator");
+        Serial.println("  WATER_LEVEL              — read water-level sensor");
+        Serial.println("  TEMP                     — read all DS18B20 temperatures");
+        Serial.println("  STATUS                   — full status dump");
+        Serial.println("  MAC                      — print WiFi MAC address");
+        Serial.println("  RPI:<CMD>:<VAL>          — run any RPI: protocol command");
+        Serial.println("  Examples: RPI:RELAY1:5000  RPI:WARM:17143  RPI:STOP:0");
     }
 }
 
-// ── UART2 (RPi) command parser ────────────────────────────────────────────────
+// ── ESP-Now (RPi) command parser ─────────────────────────────────────────────
 // Protocol format: "RPI:<COMMAND>:<VALUE>\n"
 //
 //   RPI:RELAY1:<ms>   open relay 1 for <ms> milliseconds
@@ -210,31 +275,57 @@ static void handleRpiCommand(const String& msg) {
     } else if (command == "SSR1") {
         bool on = (value == "1" || value == "ON");
         operateSSR(SSR1_PIN, on);
-        RpiSerial.printf("ESP:SSR1:%s\n", on ? "ON" : "OFF");
+        char buf[32]; snprintf(buf, sizeof(buf), "ESP:SSR1:%s", on ? "ON" : "OFF");
+        sendToAcceptor(buf);
     } else if (command == "SSR2") {
         bool on = (value == "1" || value == "ON");
         operateSSR(SSR2_PIN, on);
         _ssr2Active = on;   // keep thermostat state in sync
-        RpiSerial.printf("ESP:SSR2:%s\n", on ? "ON" : "OFF");
+        char buf[32]; snprintf(buf, sizeof(buf), "ESP:SSR2:%s", on ? "ON" : "OFF");
+        sendToAcceptor(buf);
     } else if (command == "SSR3") {
         bool on = (value == "1" || value == "ON");
         operateSSR(SSR3_PIN, on);
         _ssr3Active = on;   // keep thermostat state in sync
-        RpiSerial.printf("ESP:SSR3:%s\n", on ? "ON" : "OFF");
+        char buf[32]; snprintf(buf, sizeof(buf), "ESP:SSR3:%s", on ? "ON" : "OFF");
+        sendToAcceptor(buf);
     } else if (command == "STOP") {
         for (uint8_t i = 0; i < 3; i++) relayTimers[i].active = false;
         warmMixer.active = false;   // cancel any in-progress warm mixing
         stopAllRelays();
-        RpiSerial.println("ESP:STOP:OK");
+        sendToAcceptor("ESP:STOP:OK");
+    } else if (command == "PING") {
+        // Respond to a connectivity ping from the acceptor or serial monitor.
+        sendToAcceptor("ESP:PONG:1");
+    } else if (command == "WATER_LEVEL") {
+        // Query water level sensor and respond immediately.
+        bool present = waterLevel.isWaterPresent();
+        char buf[32]; snprintf(buf, sizeof(buf), "ESP:WATER_LEVEL:%d", present ? 1 : 0);
+        sendToAcceptor(buf);
     }
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 void setup() {
     Serial.begin(115200);
-#ifndef USB_TEST_MODE
-    RpiSerial.begin(SERIAL2_BAUD, SERIAL_8N1, UART2_RX_PIN, UART2_TX_PIN);
-#endif
+
+    // ── ESP-Now init ──────────────────────────────────────────────────────────
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect();
+    if (esp_now_init() != ESP_OK) {
+        Serial.println("ESP-Now init failed");
+    } else {
+        esp_now_register_recv_cb(onDataRecv);
+        esp_now_peer_info_t peerInfo{};
+        memcpy(peerInfo.peer_addr, acceptorMAC, 6);
+        peerInfo.channel = 0;
+        peerInfo.encrypt = false;
+        if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+            Serial.println("ESP-Now: failed to add Acceptor peer");
+        } else {
+            Serial.println("ESP-Now: Acceptor peer registered");
+        }
+    }
 
     initRELAY();
 
@@ -244,14 +335,14 @@ void setup() {
 
     flow1.begin(FLOW_SENSOR1_PIN);
     flow2.begin(FLOW_SENSOR2_PIN);
-    flow3.begin(FLOW_SENSOR3_PIN);
+    waterLevel.begin(WATER_LEVEL_SENSOR_PIN);
 
     temp1.begin(DS18B20_1_PIN);
     temp2.begin(DS18B20_2_PIN);
     temp3.begin(DS18B20_3_PIN);
 
     Serial.println("ESPWDV ready");
-    RpiSerial.println("ESP:STATUS:READY");
+    sendToAcceptor("ESP:STATUS:READY");
 }
 
 // ── Temperature broadcast state (module-level, used in loop) ─────────────────
@@ -267,21 +358,14 @@ static bool          _tempConverting= false; // true while waiting for conversio
 // ── Loop ──────────────────────────────────────────────────────────────────────
 void loop() {
     // ── 1. USB Serial monitor commands (for debugging / testing) ─────────────
-    // Disabled in USB_TEST_MODE: Serial is shared with RPi protocol traffic.
-#ifndef USB_TEST_MODE
     if (Serial.available()) {
         String cmd = Serial.readStringUntil('\n');
         cmd.trim();
         if (cmd.length() > 0) handleSerialCommand(cmd);
     }
-#endif
 
-    // ── 2. Inbound commands from Raspberry Pi (Serial2 or USB in test mode) ──
-    if (RpiSerial.available()) {
-        String msg = RpiSerial.readStringUntil('\n');
-        msg.trim();
-        if (msg.length() > 0) handleRpiCommand(msg);
-    }
+    // ── 2. Inbound commands from ESPWDVAcceptor arrive via ESP-Now (onDataRecv)
+    //    No polling needed here — handled by the registered callback above.
 
     // ── 3. Non-blocking relay timers ─────────────────────────────────────────
     for (uint8_t i = 0; i < 3; i++) {
@@ -299,14 +383,18 @@ void loop() {
                 } else if (warmMixer.phase == 2) {
                     // Cold phase done → warm dispense complete
                     warmMixer.active = false;
-                    RpiSerial.println("ESP:DONE:WARM");
+                    sendToAcceptor("ESP:DONE:WARM");
                 }
             } else {
                 // Normal single-relay completion
                 FlowSensor& fs = flowByIndex(i);
-                RpiSerial.printf("ESP:DONE:%s\n", t.label);
-                RpiSerial.printf("ESP:FLOW%u:%.3f\n", i + 1, fs.readFlowRate());
-                RpiSerial.printf("ESP:VOL%u:%.1f\n",  i + 1, fs.getTotalVolume());
+                char buf[64];
+                snprintf(buf, sizeof(buf), "ESP:DONE:%s", t.label);
+                sendToAcceptor(buf);
+                snprintf(buf, sizeof(buf), "ESP:FLOW%u:%.3f", i + 1, fs.readFlowRate());
+                sendToAcceptor(buf);
+                snprintf(buf, sizeof(buf), "ESP:VOL%u:%.1f", i + 1, fs.getTotalVolume());
+                sendToAcceptor(buf);
             }
         }
     }
@@ -319,7 +407,7 @@ void loop() {
     //
     // Phase B: After 800 ms (conversion complete), read values and send to RPi.
     //
-    // Format sent on RpiSerial (UART2):
+    // Format sent via ESP-Now to ESPWDVAcceptor:
     //   TEMP:HOT:<celsius>    e.g.  TEMP:HOT:45.2
     //   TEMP:WARM:<celsius>          TEMP:WARM:32.8
     //   TEMP:COLD:<celsius>          TEMP:COLD:12.4
@@ -340,38 +428,52 @@ void loop() {
         float hot  = temp1.getTemperatureC();
         float warm = temp2.getTemperatureC();
         float cold = temp3.getTemperatureC();
-        RpiSerial.printf("TEMP:HOT:%.1f\n",  hot);
-        RpiSerial.printf("TEMP:WARM:%.1f\n", warm);
-        RpiSerial.printf("TEMP:COLD:%.1f\n", cold);
+        char buf[40];
+        snprintf(buf, sizeof(buf), "TEMP:HOT:%.1f",  hot);  sendToAcceptor(buf);
+        snprintf(buf, sizeof(buf), "TEMP:WARM:%.1f", warm); sendToAcceptor(buf);
+        snprintf(buf, sizeof(buf), "TEMP:COLD:%.1f", cold); sendToAcceptor(buf);
         _tempLastSendMs= millis();
         _tempConverting= false;
 
         // ── 5. Thermostat control (runs once per temperature cycle) ──────────
         //
         // SSR2 (HEATER) — HOT water, target 85°C, 2°C hysteresis.
-        //   Turn ON  when hot < 83°C (below lower threshold).
-        //   Turn OFF when hot ≥ 85°C (target reached).
         if (!_ssr2Active && hot < 83.0f) {
             operateSSR(SSR2_PIN, true);
             _ssr2Active = true;
-            RpiSerial.println("ESP:SSR2:ON");
+            sendToAcceptor("ESP:SSR2:ON");
         } else if (_ssr2Active && hot >= 85.0f) {
             operateSSR(SSR2_PIN, false);
             _ssr2Active = false;
-            RpiSerial.println("ESP:SSR2:OFF");
+            sendToAcceptor("ESP:SSR2:OFF");
         }
 
         // SSR3 (COOLER) — COLD water, target 5°C, 2°C hysteresis.
-        //   Turn ON  when cold > 7°C (above upper threshold).
-        //   Turn OFF when cold ≤ 5°C (target reached).
         if (!_ssr3Active && cold > 7.0f) {
             operateSSR(SSR3_PIN, true);
             _ssr3Active = true;
-            RpiSerial.println("ESP:SSR3:ON");
+            sendToAcceptor("ESP:SSR3:ON");
         } else if (_ssr3Active && cold <= 5.0f) {
             operateSSR(SSR3_PIN, false);
             _ssr3Active = false;
-            RpiSerial.println("ESP:SSR3:OFF");
+            sendToAcceptor("ESP:SSR3:OFF");
+        }
+    }
+
+    // ── 6. Non-blocking periodic water-level broadcast (every 2 s) ───────────
+    // Sends "ESP:WATER:1" when water is present, "ESP:WATER:0" when tank is low.
+    // Also broadcasts immediately on state change (present ↔ low).
+    {
+        bool nowPresent = waterLevel.isWaterPresent();
+        bool stateChanged = (nowPresent != _lastWaterLevel);
+        bool intervalElapsed = (nowMs - _waterLevelSendMs >= WATER_LEVEL_BROADCAST_INTERVAL_MS);
+
+        if (stateChanged || intervalElapsed) {
+            char wbuf[24];
+            snprintf(wbuf, sizeof(wbuf), "ESP:WATER:%d", nowPresent ? 1 : 0);
+            sendToAcceptor(wbuf);
+            _lastWaterLevel   = nowPresent;
+            _waterLevelSendMs = nowMs;
         }
     }
 }

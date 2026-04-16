@@ -35,9 +35,13 @@ class TemperaturePage(BasePage):
                 font=F["btn_lg"],
             ).grid(row=0, column=col, padx=10, pady=10, sticky="nsew")
 
-        self.make_back_button(self, "services").grid(
+        self.make_back_button(self, "dashboard").grid(
             row=2, column=0, padx=PAD, pady=(0, PAD), sticky="w"
         )
+
+    def on_show(self) -> None:
+        # Service selection is bypassed — always default to Dispense.
+        self.app_state.selection.service = "Dispense"
 
     def _select(self, temp: str) -> None:
         self.app_state.selection.temperature = temp
