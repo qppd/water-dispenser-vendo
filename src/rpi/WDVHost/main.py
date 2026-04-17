@@ -56,6 +56,7 @@ from ui.topup_cash_page      import TopupCashPage
 from ui.dispensing_page      import DispensingPage
 from ui.qr_scan_page         import QRScanPage
 from ui.sidebar              import Sidebar
+from ui.keyboard             import OnScreenKeyboard
 
 
 # ── CustomTkinter appearance ──────────────────────────────────────────────────
@@ -66,6 +67,9 @@ ctk.set_default_color_theme("blue")
 _SIDEBAR_HIDDEN_PAGES = {
     "home", "register", "signin", "forgot", "qr_scan", "dispensing",
 }
+
+# Pages where the on-screen keyboard toggle button is shown
+_KEYBOARD_PAGES = {"signin", "register", "forgot"}
 
 
 class MainApp(ctk.CTk):
@@ -170,6 +174,9 @@ class MainApp(ctk.CTk):
         self._pages: dict = {}
         self._build_pages()
 
+        # ── On-screen keyboard ─────────────────────────────────────────────
+        self._setup_keyboard()
+
         # ── Previous-page tracker (used by QRScanPage to go back) ────────────
         self.prev_page: str = "home"
 
@@ -209,6 +216,26 @@ class MainApp(ctk.CTk):
             frame.grid(row=0, column=0, sticky="nsew")
             self._pages[name] = frame
 
+    # ── On-screen keyboard setup ──────────────────────────────────────────────
+
+    def _setup_keyboard(self) -> None:
+        """Create the on-screen keyboard and bind it to all auth-page entries."""
+        self._keyboard = OnScreenKeyboard(self)
+
+        login_pg    = self._pages["signin"]
+        register_pg = self._pages["register"]
+        forgot_pg   = self._pages["forgot"]
+
+        self._keyboard.bind_entries([
+            login_pg._e_user,
+            login_pg._e_pass,
+            register_pg._e_user,
+            register_pg._e_email,
+            register_pg._e_phone,
+            register_pg._e_pass,
+            forgot_pg._e_email,
+        ])
+
     # ── Public navigation API ─────────────────────────────────────────────────
 
     def show_page(self, name: str) -> None:
@@ -238,6 +265,13 @@ class MainApp(ctk.CTk):
             )
             self.sidebar.grid(row=0, column=0, sticky="nsew")
             self.sidebar.refresh()
+
+        # Show or hide the on-screen keyboard toggle button
+        if hasattr(self, "_keyboard"):
+            if name in _KEYBOARD_PAGES:
+                self._keyboard.show_toggle()
+            else:
+                self._keyboard.hide_toggle()
 
         page.on_show()
 
