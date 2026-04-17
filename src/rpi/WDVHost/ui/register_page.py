@@ -37,17 +37,6 @@ class RegisterPage(BasePage):
         )
         self._notice_lbl.grid(row=1, column=0, padx=PAD, pady=(0, 6))
 
-        # Simulate coin insert button (testing without hardware)
-        self.make_button(
-            card,
-            text=f"[Test] Insert ₱{ACTIVATION_FEE} Coin",
-            command=lambda: self._sim_coin(ACTIVATION_FEE),
-            color="#fbc02d",
-            text_color="#333333",
-            height=40,
-            font=F["small"],
-        ).grid(row=2, column=0, padx=PAD, pady=(0, 10), sticky="ew")
-
         # ── Form fields ────────────────────────────────────────────────────────
         self._e_user  = self.make_entry(card, placeholder="Enter your username", width=300)
         self._e_email = self.make_entry(card, placeholder="Enter your email", width=300)
@@ -57,7 +46,7 @@ class RegisterPage(BasePage):
         )
 
         for idx, widget in enumerate(
-            [self._e_user, self._e_email, self._e_phone, self._e_pass], start=3
+            [self._e_user, self._e_email, self._e_phone, self._e_pass], start=2
         ):
             widget.grid(row=idx, column=0, padx=PAD, pady=4, sticky="ew")
 
@@ -70,7 +59,7 @@ class RegisterPage(BasePage):
             height=BTN_HEIGHT,
         )
         self._btn_confirm.configure(state="disabled", fg_color="#cccccc")
-        self._btn_confirm.grid(row=7, column=0, padx=PAD, pady=(10, PAD), sticky="ew")
+        self._btn_confirm.grid(row=6, column=0, padx=PAD, pady=(10, PAD), sticky="ew")
 
         # Back
         self.make_back_button(self, "home").grid(
