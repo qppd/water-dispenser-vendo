@@ -289,7 +289,9 @@ class OnScreenKeyboard(ctk.CTkFrame):
         w    = self._root.winfo_width()  or 1024
         h    = self._root.winfo_height() or 600
         kb_h = int(h * KB_HEIGHT_RATIO)
-        self.place(x=0, y=h - kb_h, width=w, height=kb_h)
+        # CustomTkinter forbids passing width/height to place(); set via configure first
+        self.configure(width=w, height=kb_h)
+        self.place(x=0, y=h - kb_h)
         self.lift()
         self._update_toggle_position()
 
@@ -326,7 +328,8 @@ class OnScreenKeyboard(ctk.CTkFrame):
         x = w - TOGGLE_SIZE - TOGGLE_MARGIN
         y = h - TOGGLE_SIZE - TOGGLE_MARGIN - (kb_h if self._visible else 0)
 
-        self._toggle_btn.place(x=x, y=y, width=TOGGLE_SIZE, height=TOGGLE_SIZE)
+        # width/height are already set in the CTkButton constructor; place() only takes x/y
+        self._toggle_btn.place(x=x, y=y)
         self._toggle_btn.lift()
 
     # ── Entry binding ──────────────────────────────────────────────────────────
