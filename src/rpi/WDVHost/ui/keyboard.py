@@ -83,7 +83,7 @@ class OnScreenKeyboard(ctk.CTkFrame):
             border_color=_C["kb_border"],
             border_width=2,
         )
-        self._root:    ctk.CTk              = root
+        self._app:    ctk.CTk              = root
         self._target:  Optional[ctk.CTkEntry] = None
         self._shift:   bool                 = False
         self._caps:    bool                 = False
@@ -246,7 +246,7 @@ class OnScreenKeyboard(ctk.CTkFrame):
         (tapping a keyboard button shifts focus away from the text field).
         """
         try:
-            focused = self._root.focus_get()
+            focused = self._app.focus_get()
             widget  = focused
             while widget is not None:
                 if isinstance(widget, ctk.CTkEntry):
@@ -285,9 +285,9 @@ class OnScreenKeyboard(ctk.CTkFrame):
         if self._visible:
             return
         self._visible = True
-        self._root.update_idletasks()
-        w    = self._root.winfo_width()  or 1024
-        h    = self._root.winfo_height() or 600
+        self._app.update_idletasks()
+        w    = self._app.winfo_width()  or 1024
+        h    = self._app.winfo_height() or 600
         kb_h = int(h * KB_HEIGHT_RATIO)
         # CustomTkinter forbids passing width/height to place(); set via configure first
         self.configure(width=w, height=kb_h)
@@ -320,9 +320,9 @@ class OnScreenKeyboard(ctk.CTkFrame):
     def _update_toggle_position(self) -> None:
         """(Re)place the floating toggle button above the keyboard (if visible)
         or at the very bottom-right corner (if keyboard is hidden)."""
-        self._root.update_idletasks()
-        w    = self._root.winfo_width()  or 1024
-        h    = self._root.winfo_height() or 600
+        self._app.update_idletasks()
+        w    = self._app.winfo_width()  or 1024
+        h    = self._app.winfo_height() or 600
         kb_h = int(h * KB_HEIGHT_RATIO)
 
         x = w - TOGGLE_SIZE - TOGGLE_MARGIN
