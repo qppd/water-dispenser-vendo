@@ -100,6 +100,7 @@ class RegisterPage(BasePage):
     def _sim_coin(self, value: int) -> None:
         self.app_state.add_cash(value, is_activation=True)
         self._update_notice()
+        self.controller.sidebar.refresh()
 
     def _update_notice(self) -> None:
         inserted = self.app_state.activation_cash_inserted()
@@ -132,16 +133,11 @@ class RegisterPage(BasePage):
             self.controller.show_alert("Missing Email", "Please enter a valid email address.")
             return
 
-        # Deduct activation fee (1 pt) then award welcome bonus
-        self.app_state.user.points -= 1
-        self.app_state.add_transaction("Activation Fee", -1)
+        # Deduct full activation fee then award welcome bonus
+        self.app_state.user.points -= ACTIVATION_FEE
+        self.app_state.add_transaction("Activation Fee", -ACTIVATION_FEE)
         self.app_state.user.points += WELCOME_BONUS
         self.app_state.add_transaction("Welcome Bonus", WELCOME_BONUS)
-
-        self.app_state.user.username = username
-        self.app_state.user.email    = email
-        self.app_state.user.phone    = phone
-        self.app_state.user.is_guest = False
 
         try:
             # ── Step 1: Create Firebase Auth account using real email ─────────
@@ -149,12 +145,18 @@ class RegisterPage(BasePage):
             uid    = result["localId"]
             self.app_state.user.uid = uid
 
-            # ── Step 2: Save profile to RTDB (password stripped by storage.py) ─
+            # ── Step 2: Apply profile fields and mark as registered ───────────
+            self.app_state.user.username = username
+            self.app_state.user.email    = email
+            self.app_state.user.phone    = phone
+            self.app_state.user.is_guest = False
+
+            # ── Step 3: Save profile to RTDB (password stripped by storage.py) ─
             storage.save_user(self.app_state.user.to_dict())
 
         except Exception as exc:
             # Roll back the in-memory point adjustments if Firebase call fails
-            self.app_state.user.points += 1
+            self.app_state.user.points += ACTIVATION_FEE
             self.app_state.user.points -= WELCOME_BONUS
             self.controller.show_alert(
                 "Registration Failed",
