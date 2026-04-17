@@ -36,7 +36,7 @@ class SerialManager:
         self,
         event_queue: queue.Queue,
         port: Optional[str] = None,
-        baud: int = 9600,
+        baud: int = 115200,
     ) -> None:
         self._q      = event_queue
         self._port   = port
@@ -54,6 +54,7 @@ class SerialManager:
                 import serial  # type: ignore
                 self._ser = serial.Serial(self._port, self._baud, timeout=0.5)
                 print(f"[SerialManager] Connected: {self._port} @ {self._baud}")
+                self._request_initial_sensor_data()
             except Exception as exc:
                 print(f"[SerialManager] Cannot open {self._port}: {exc}")
                 self._ser = None
@@ -72,6 +73,7 @@ class SerialManager:
     # ── Reader thread ─────────────────────────────────────────────────────────
 
     def _reader(self) -> None:
+        import serial  # type: ignore
         while self._running:
             if self._ser and self._ser.is_open:
                 try:
@@ -80,6 +82,10 @@ class SerialManager:
                         line = raw.decode("utf-8", errors="replace").strip()
                         if line:
                             self._parse(line)
+                except serial.SerialException:
+                    print(f"[SerialManager] Device disconnected: {self._port}")
+                    self._close_port()
+                    time.sleep(0.1)
                 except Exception as exc:
                     print(f"[SerialManager] Read error: {exc}")
                     self._close_port()
@@ -104,13 +110,28 @@ class SerialManager:
             import serial  # type: ignore
             self._ser = serial.Serial(self._port, self._baud, timeout=0.5)
             print(f"[SerialManager] Reconnected: {self._port} @ {self._baud}")
+            self._request_initial_sensor_data()
         except Exception as exc:
             print(f"[SerialManager] Reconnect failed ({self._port}): {exc}")
             self._ser = None
             time.sleep(2.0)
 
+    def _request_initial_sensor_data(self) -> None:
+        """Ask ESPWDV (via Acceptor) for an immediate water-level and ping.
+        ESPWDV will reply on its next loop iteration via ESP-Now → Acceptor → Serial.
+        """
+        try:
+            if self._ser and self._ser.is_open:
+                self._ser.write(b"RPI:WATER_LEVEL:0\r\n")
+                self._ser.write(b"RPI:PING:1\r\n")
+        except Exception:
+            pass
+
     def _parse(self, line: str) -> None:
         """Classify an ESP32 text line and put a typed event onto the queue."""
+        # Debug: print all incoming serial lines to help diagnose ESP-Now issues.
+        print(f"[SerialManager] RX: {line}")
+
         m = _COIN_RE.search(line)
         if m:
             self._q.put({"type": "coin", "value": int(m.group(1))})

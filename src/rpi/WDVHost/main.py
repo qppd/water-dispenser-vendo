@@ -94,7 +94,7 @@ class MainApp(ctk.CTk):
         self.configure(fg_color=C["app_bg"])
 
         # Fullscreen kiosk mode
-        self.attributes("-fullscreen", True)
+        # self.attributes("-fullscreen", True)
         self.config(cursor="none")
         # Allow Escape to exit (remove or comment out for production lockdown)
         self.bind("<Escape>", lambda _e: self._on_close())
@@ -111,12 +111,16 @@ class MainApp(ctk.CTk):
         )
         self.serial_mgr.start()
 
-        # ── Second ESP32 (ESPWDV) now communicates via ESP-Now through ────────
-        # ESPWDVAcceptor. All dispenser commands go through serial_mgr above.
-        # SecondESPSerial is kept in simulation mode (port=None) for compatibility.
+        # ── Second ESP32 (ESPWDV) — direct USB serial fallback ─────────────
+        # When ESP-Now MAC addresses are correctly configured, ESPWDV sensor
+        # data flows:  ESPWDV → ESP-Now → ESPWDVAcceptor → Serial → RPi.
+        # If ESP-Now is not configured, connect ESPWDV via USB and set
+        # ESP_DISPENSER_PORT in config.py to enable direct sensor readout.
+        from config import ESP_DISPENSER_PORT as _DISP_PORT  # noqa: E402
+        disp_port = _DISP_PORT if (not simulation_mode and _DISP_PORT) else None
         self.second_esp = SecondESPSerial(
             event_queue=self.app_state.hw_event_queue,
-            port=None,
+            port=disp_port,
         )
         self.second_esp.start()
 

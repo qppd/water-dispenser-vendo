@@ -34,6 +34,12 @@ from typing import Optional
 # TEMP:HOT:45.2   TEMP:WARM:32.8   TEMP:COLD:12.4
 _TEMP_RE = re.compile(r"^TEMP:(HOT|WARM|COLD):([-\d.]+)$")
 
+# ESP:WATER:0 or ESP:WATER:1  — periodic water-level broadcast
+_WATER_RE = re.compile(r"^ESP:WATER:([01])$")
+
+# ESP:WATER_LEVEL:0 or ESP:WATER_LEVEL:1  — response to RPI:WATER_LEVEL query
+_WATER_LEVEL_RE = re.compile(r"^ESP:WATER_LEVEL:([01])$")
+
 # ESP:STATUS:READY   ESP:DONE:RELAY1   etc.
 _ESP_RE = re.compile(r"^ESP:(\w+):(.+)$")
 
@@ -125,6 +131,18 @@ class SecondESPSerial:
                 self._q.put({"type": "temp", "sensor": sensor, "value": value})
             except ValueError:
                 pass
+            return
+
+        # ── Water-level broadcast (ESP:WATER:0 / ESP:WATER:1) ────────────────
+        m = _WATER_RE.match(line)
+        if m:
+            self._q.put({"type": "water_level", "present": m.group(1) == "1"})
+            return
+
+        # ── Water-level query response (ESP:WATER_LEVEL:0 / 1) ───────────────
+        m = _WATER_LEVEL_RE.match(line)
+        if m:
+            self._q.put({"type": "water_level", "present": m.group(1) == "1"})
             return
 
         # ── ESP status / completion messages ──────────────────────────────────

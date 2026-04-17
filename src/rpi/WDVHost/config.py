@@ -18,3 +18,9 @@ PRINTER_PORT: str = "/dev/thermal_printer"
 # Serial port for ESPWDVAcceptor (Silicon Labs CP2102, VID 10c4 / PID ea60).
 # Permanent udev symlink: /dev/esp_acceptor → /dev/ttyUSB*
 ESP_ACCEPTOR_PORT: str = "/dev/esp_acceptor"
+
+# Serial port for ESPWDV (Dispenser ESP32) — direct USB fallback.
+# ESPWDV communicates with RPi exclusively via ESP-Now through ESPWDVAcceptor.
+# Set to "" (empty) to disable direct USB serial (normal operation).
+# Only set a port here for debugging if ESP-Now is broken.
+ESP_DISPENSER_PORT: str = ""
