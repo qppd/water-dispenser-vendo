@@ -64,7 +64,7 @@ _C = {
 KB_HEIGHT_RATIO: float = 0.30   # keyboard = 30 % of root height
 TOGGLE_SIZE:     int   = 60     # floating button side length (px)
 TOGGLE_MARGIN:   int   = 12     # px from window edge
-KEY_FONT_SIZE:   int   = 17     # pt — large for easy reading on touchscreen
+KEY_FONT_SIZE:   int   = 14     # pt — scales well across 600-768 px screens
 KEY_CORNER:      int   = 6
 
 
@@ -112,28 +112,24 @@ class OnScreenKeyboard(ctk.CTkFrame):
     # ── Build layout ───────────────────────────────────────────────────────────
 
     def _build_rows(self) -> None:
-        """Create one row-frame per entry in _ROWS and populate buttons."""
-        self.grid_columnconfigure(0, weight=1)
-        for r_idx, row_def in enumerate(_ROWS):
-            self.grid_rowconfigure(r_idx, weight=1)
+        """Build key rows with pack geometry so buttons fill available space."""
+        # Prevent keyboard frame from shrinking to fit children;
+        # size is set externally via configure() at show() time.
+        self.pack_propagate(False)
 
+        for row_def in _ROWS:
             row_frame = ctk.CTkFrame(self, fg_color="transparent")
-            row_frame.grid(row=r_idx, column=0, sticky="nsew", padx=4, pady=2)
-            row_frame.grid_rowconfigure(0, weight=1)
+            # Each row shares the keyboard height equally
+            row_frame.pack(side="top", fill="both", expand=True, padx=3, pady=1)
 
             btn_row: list[tuple[ctk.CTkButton, object]] = []
-            col = 0
             for key_def in row_def:
                 label = self._resolve_label(key_def)
                 btn   = self._make_key_button(row_frame, label, key_def)
-
-                # Give SPACE 4× the column weight so it appears wide
-                weight = 4 if (isinstance(key_def, str) and key_def == "SPACE") else 1
-                row_frame.grid_columnconfigure(col, weight=weight)
-                btn.grid(row=0, column=col, padx=2, pady=2, sticky="nsew")
-
+                # All keys share row width equally; row 4 has fewer keys so
+                # SPACE is naturally ~37 % wider than a letter-row key.
+                btn.pack(side="left", fill="both", expand=True, padx=1, pady=1)
                 btn_row.append((btn, key_def))
-                col += 1
 
             self._btn_grid.append(btn_row)
 
@@ -158,6 +154,8 @@ class OnScreenKeyboard(ctk.CTkFrame):
         btn = ctk.CTkButton(
             parent,
             text=label,
+            width=1,    # disable CTk minimum-width enforcement; pack controls size
+            height=1,   # disable CTk minimum-height enforcement; pack controls size
             fg_color=fg,
             hover_color=hv,
             text_color="#ffffff",
