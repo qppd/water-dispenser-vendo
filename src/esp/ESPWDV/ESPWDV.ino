@@ -39,9 +39,10 @@
 #include "DS18B20_SENSOR.h"
 
 // ── ESP-Now peer: ESPWDVAcceptor MAC address ──────────────────────────────────
-// Replace with the actual MAC address of your ESPWDVAcceptor.
-// Run: Serial.println(WiFi.macAddress()); on ESPWDVAcceptor to get it.
-static uint8_t acceptorMAC[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
+// *** REQUIRED: Replace with the actual MAC address of your ESPWDVAcceptor. ***
+// Flash ESPWDVAcceptor, open Serial Monitor (9600 baud), type MAC and press Enter.
+// Copy the printed MAC here.  ESP-Now will NOT work with placeholder values.
+static uint8_t acceptorMAC[] = {0x7C, 0x9E, 0xBD, 0x91, 0x8F, 0x1C};  // ESPWDVAcceptor MAC: 7C:9E:BD:91:8F:1C
 
 // ── ESP-Now helpers ───────────────────────────────────────────────────────────
 static void sendToAcceptor(const char* msg) {
@@ -342,6 +343,9 @@ void setup() {
     temp3.begin(DS18B20_3_PIN);
 
     Serial.println("ESPWDV ready");
+    Serial.print("ESPWDV MAC: ");
+    Serial.println(WiFi.macAddress());
+    Serial.println(">>> IMPORTANT: Copy this MAC into ESPWDVAcceptor dispenserMAC[] <<<");
     sendToAcceptor("ESP:STATUS:READY");
 }
 
@@ -429,9 +433,9 @@ void loop() {
         float warm = temp2.getTemperatureC();
         float cold = temp3.getTemperatureC();
         char buf[40];
-        snprintf(buf, sizeof(buf), "TEMP:HOT:%.1f",  hot);  sendToAcceptor(buf);
-        snprintf(buf, sizeof(buf), "TEMP:WARM:%.1f", warm); sendToAcceptor(buf);
-        snprintf(buf, sizeof(buf), "TEMP:COLD:%.1f", cold); sendToAcceptor(buf);
+        snprintf(buf, sizeof(buf), "TEMP:HOT:%.1f",  hot);  sendToAcceptor(buf); Serial.println(buf);
+        snprintf(buf, sizeof(buf), "TEMP:WARM:%.1f", warm); sendToAcceptor(buf); Serial.println(buf);
+        snprintf(buf, sizeof(buf), "TEMP:COLD:%.1f", cold); sendToAcceptor(buf); Serial.println(buf);
         _tempLastSendMs= millis();
         _tempConverting= false;
 
@@ -472,6 +476,7 @@ void loop() {
             char wbuf[24];
             snprintf(wbuf, sizeof(wbuf), "ESP:WATER:%d", nowPresent ? 1 : 0);
             sendToAcceptor(wbuf);
+            Serial.println(wbuf);
             _lastWaterLevel   = nowPresent;
             _waterLevelSendMs = nowMs;
         }

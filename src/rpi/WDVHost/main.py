@@ -98,7 +98,7 @@ class MainApp(ctk.CTk):
         self.configure(fg_color=C["app_bg"])
 
         # Fullscreen kiosk mode
-        # self.attributes("-fullscreen", True)
+        self.attributes("-fullscreen", True)
         self.config(cursor="none")
         # Allow Escape to exit (remove or comment out for production lockdown)
         self.bind("<Escape>", lambda _e: self._on_close())

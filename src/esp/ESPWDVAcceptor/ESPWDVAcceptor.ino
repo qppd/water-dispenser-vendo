@@ -39,29 +39,39 @@
 #include "BUZZER_CONFIG.h"
 
 // ── ESP-Now peer: ESPWDV (dispenser) MAC address ─────────────────────────────
-// Replace with the actual MAC address of your ESPWDV.
-// Run MAC command on ESPWDV serial monitor to get it, then paste here.
-static uint8_t dispenserMAC[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
+// *** REQUIRED: Replace with the actual MAC address of your ESPWDV. ***
+// Flash ESPWDV, open Serial Monitor (115200 baud), type MAC and press Enter.
+// Copy the printed MAC here.  ESP-Now will NOT work with placeholder values.
+static uint8_t dispenserMAC[] = {0x80, 0xF3, 0xDA, 0x55, 0x10, 0x64};  // ESPWDV MAC: 80:F3:DA:55:10:64
 
 // ── ESP-Now ready flag ────────────────────────────────────────────────────────
 // Guards all esp_now_send() calls; set true only after successful init + peer add.
 static bool _espNowReady = false;
 
-// ── Thread-safe ESP-Now receive buffer ───────────────────────────────────────
+// ── Thread-safe ESP-Now receive ring buffer ───────────────────────────────────
 // onDataRecv() runs in the WiFi task. Calling Serial.println() there directly
 // races with Serial I/O in the loop task and produces a LoadProhibited crash
 // inside the UART driver (EXCVADDR 0x4C — an internal queue-handle offset).
-// Data is copied here; loop() flushes it to Serial safely.
-#define RECV_BUF_LEN 251
-static volatile bool _recvPending = false;
-static char          _recvBuf[RECV_BUF_LEN];
+// Messages are queued here; loop() flushes them to Serial safely.
+//
+// Ring buffer with 8 slots so that rapid bursts (e.g. TEMP:HOT + TEMP:WARM +
+// TEMP:COLD sent back-to-back from ESPWDV) are not silently dropped.
+#define RECV_BUF_LEN   251
+#define RECV_RING_SIZE   8
+
+static char          _recvRing[RECV_RING_SIZE][RECV_BUF_LEN];
+static volatile int  _recvHead = 0;  // next slot to write (WiFi task)
+static volatile int  _recvTail = 0;  // next slot to read  (loop task)
+
+static inline bool _ringFull()  { return (((_recvHead + 1) % RECV_RING_SIZE) == _recvTail); }
+static inline bool _ringEmpty() { return (_recvHead == _recvTail); }
 
 // ── ESP-Now receive callback ─────────────────────────────────────────────────
 void onDataRecv(const esp_now_recv_info_t* recv_info, const uint8_t* data, int len) {
-    if (len <= 0 || len > 250 || _recvPending) return;
-    memcpy(_recvBuf, data, len);
-    _recvBuf[len] = '\0';
-    _recvPending = true;   // loop() will flush to Serial
+    if (len <= 0 || len > 250 || _ringFull()) return;
+    memcpy(_recvRing[_recvHead], data, len);
+    _recvRing[_recvHead][len] = '\0';
+    _recvHead = (_recvHead + 1) % RECV_RING_SIZE;
 }
 
 // ── Serial monitor command handler ───────────────────────────────────────────
@@ -184,7 +194,7 @@ static void handleSerialCommand(const String& cmd) {
 // ── Setup ─────────────────────────────────────────────────────────────────────
 void setup()
 {
-    Serial.begin(9600);
+    Serial.begin(115200);
     Serial.setTimeout(10);   // prevent readStringUntil() blocking loop for 1 s
 
     // ── ESP-Now init ──────────────────────────────────────────────────────────
@@ -217,6 +227,9 @@ void setup()
     playTone(1200, 300); // Startup tone
 
     Serial.println("ESPWDVAcceptor ready");
+    Serial.print("ESPWDVAcceptor MAC: ");
+    Serial.println(WiFi.macAddress());
+    Serial.println(">>> IMPORTANT: Copy this MAC into ESPWDV acceptorMAC[] <<<");
     Serial.println("Type HELP for serial monitor commands.");
 }
 
@@ -224,9 +237,9 @@ void setup()
 void loop()
 {
     // ── 0. Flush deferred ESP-Now messages to Serial (safe: loop-task context) ─
-    if (_recvPending) {
-        Serial.println(_recvBuf);
-        _recvPending = false;
+    while (!_ringEmpty()) {
+        Serial.println(_recvRing[_recvTail]);
+        _recvTail = (_recvTail + 1) % RECV_RING_SIZE;
     }
 
     // ── 1. Inbound serial commands from RPi (or Serial Monitor) ──────────────

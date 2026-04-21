@@ -13,11 +13,11 @@
 
 // ── Flow Sensors (input-only GPIOs, external pull-up required) ────────────────
 #define FLOW_SENSOR1_PIN 39
-#define FLOW_SENSOR2_PIN 34
+#define FLOW_SENSOR2_PIN 35
 
 // ── Water Level Sensor (input-only GPIO 35, external pull-down required) ──────
 // S8050 NPN transistor output: HIGH = water present, LOW = no water.
-#define WATER_LEVEL_SENSOR_PIN 35
+#define WATER_LEVEL_SENSOR_PIN 34
 
 // ── DS18B20 OneWire Temperature Sensors (one pin each) ───────────────────────
 #define DS18B20_1_PIN 23
