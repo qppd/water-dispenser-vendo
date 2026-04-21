@@ -1,21 +1,50 @@
 [Unit]
 Description=WDV Water Dispenser Kiosk
-# Start after the display manager has brought up the X session
-After=graphical.target
-Wants=graphical.target
+# Start after the display manager has brought up the X session AND
+# after the network is available (required for Firebase sync).
+After=graphical.target network-online.target
+Wants=graphical.target network-online.target
 
 [Service]
 Type=simple
 User=admin
+
+# Display environment — required for Tkinter/X11
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/admin/.Xauthority
+
+# Allow the app to locate its own Python path
+Environment=PYTHONUNBUFFERED=1
+
 WorkingDirectory=/home/admin/water-dispenser-vendo/src/rpi/WDVHost
+
+# Disable screen blanking/DPMS before launch
 ExecStartPre=/usr/bin/xset s off
 ExecStartPre=/usr/bin/xset -dpms
 ExecStartPre=/usr/bin/xset s noblank
+
 ExecStart=/usr/bin/python3 /home/admin/water-dispenser-vendo/src/rpi/WDVHost/main.py
-Restart=on-failure
+
+# Always restart on any exit so the kiosk stays up after user logout,
+# process crash, or X session restart.
+Restart=always
 RestartSec=5
+
+# Prevent a crash-loop from hammering the system — allow 3 starts per 60 s.
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Give the process time to shut down cleanly before SIGKILL
+TimeoutStopSec=15
+
+# Kill the entire cgroup on stop, not just the main PID,
+# so background serial/sync threads are cleaned up.
+KillMode=control-group
+
+# Redirect output to systemd journal (view with: journalctl -u wdv-kiosk -f)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wdv-kiosk
 
 [Install]
 WantedBy=graphical.target

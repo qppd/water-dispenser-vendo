@@ -1,8 +1,28 @@
 import queue
 import threading
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import List, Optional, Callable
 
+from logger_config import get_logger
+
+logger = get_logger(__name__)
+
+# ── Payment state machine ─────────────────────────────────────────────────────
+
+class PaymentState(Enum):
+    """
+    Governs when coin/bill hardware events are accepted.
+
+    IDLE       - no payment expected; acceptor events are silently dropped.
+    SIGNUP     - account-activation flow is active (accepts coins+bills).
+    TOPUP      - cash top-up flow is active (accepts coins+bills).
+    DISPENSING - dispensing in progress; no new payment accepted.
+    """
+    IDLE       = "IDLE"
+    SIGNUP     = "SIGNUP"
+    TOPUP      = "TOPUP"
+    DISPENSING = "DISPENSING"
 
 # ── Pricing tables ──────────────────────────────────────────────────────────
 
@@ -126,6 +146,10 @@ class AppState:
         # and drained by the main Tkinter thread via after().
         self.hw_event_queue: queue.Queue = queue.Queue()
 
+        # Payment state machine — controls when coin/bill events are dispatched.
+        # Set this via set_payment_state() whenever the active page changes.
+        self.payment_state: PaymentState = PaymentState.IDLE
+
         # Pending cash inserted during activation (pesos, not points)
         self._activation_cash: int = 0
 
@@ -145,18 +169,34 @@ class AppState:
         self._on_temperature_update: Optional[Callable[[], None]] = None
         self._on_water_level_update: Optional[Callable[[bool], None]] = None
 
+        # Offline sync queue (injected by MainApp after construction)
+        self._offline_queue = None
+
+    # ── Payment state control ─────────────────────────────────────────────────
+
+    def set_payment_state(self, state: PaymentState) -> None:
+        """Transition to a new payment state and log the change."""
+        if self.payment_state != state:
+            logger.info(
+                "[AppState] PaymentState: %s → %s",
+                self.payment_state.value, state.value,
+            )
+            self.payment_state = state
+
     # ── User helpers ──────────────────────────────────────────────────────────
 
     def login(self, user: User) -> None:
         self.user = user
         self.user.is_guest = False
         self._activation_cash = 0
+        self.set_payment_state(PaymentState.IDLE)
 
     def logout(self) -> None:
         self.user = User()          # reset to default Guest
         self.history = []
         self.selection = ServiceSelection()
         self._activation_cash = 0
+        self.set_payment_state(PaymentState.IDLE)
         self.clear_callbacks()
 
     def login_guest(self) -> None:
@@ -170,17 +210,26 @@ class AppState:
         )
         self.history = []
         self._activation_cash = 0
+        self.set_payment_state(PaymentState.IDLE)
 
     # ── Points helpers ────────────────────────────────────────────────────────
 
     def add_cash(self, peso_value: int, is_activation: bool = False) -> int:
         """Convert pesos to points and credit the current user.
         Returns the number of points added.
+
+        When ``is_activation=True`` the peso amount is tracked in the
+        separate _activation_cash counter ONLY.  The user's points balance
+        is NOT touched here — points are awarded explicitly at the end of
+        the registration flow by ``register_page._complete_registration()``.
+        This prevents phantom credits from hardware noise or abandoned flows.
         """
         if is_activation:
             self._activation_cash += peso_value
-            pts = peso_value  # 1:1 for tracking during registration flow
-        elif self.user.is_guest:
+            # Do NOT add to user.points here — awarded explicitly on success.
+            return peso_value
+
+        if self.user.is_guest:
             pts = peso_value  # guests: 1 peso = 1 point
         else:
             pts = REGISTERED_RATES.get(peso_value, peso_value)
@@ -206,8 +255,10 @@ class AppState:
         return True
 
     def _sync_points_async(self) -> None:
-        """Push the current user's points to Firebase RTDB in a background thread.
+        """Queue a points sync to Firebase via the offline queue.
 
+        Falls back to a direct background thread if the offline queue is not
+        yet injected (should not happen in normal operation).
         No-op for guest sessions or if uid is unknown.
         Errors are logged but never raised — the kiosk must not crash on sync issues.
         """
@@ -216,14 +267,18 @@ class AppState:
         uid    = self.user.uid
         points = self.user.points
 
-        def _do() -> None:
-            try:
-                from firebase_config import admin_db
-                admin_db.reference(f"users/{uid}/points").set(points)
-            except Exception as exc:
-                print(f"[AppState] Firebase sync error: {exc}")
-
-        threading.Thread(target=_do, daemon=True).start()
+        if self._offline_queue is not None:
+            # Preferred path: enqueue for resilient, retried sync
+            self._offline_queue.enqueue("update_points", uid, {"points": points})
+        else:
+            # Fallback: direct async write (best-effort, no retry)
+            def _do() -> None:
+                try:
+                    from firebase_config import admin_db
+                    admin_db.reference(f"users/{uid}/points").set(points)
+                except Exception as exc:
+                    logger.error("[AppState] Firebase direct sync error: %s", exc)
+            threading.Thread(target=_do, daemon=True).start()
 
     # ── History helpers ───────────────────────────────────────────────────────
 
@@ -263,12 +318,24 @@ class AppState:
         self._on_water_level_update = None
 
     def dispatch_coin(self, value: int) -> None:
-        if self._on_coin:
-            self._on_coin(value)
+        if self.payment_state in (PaymentState.SIGNUP, PaymentState.TOPUP):
+            if self._on_coin:
+                self._on_coin(value)
+        else:
+            logger.warning(
+                "[AppState] Coin event P%d ignored — payment_state=%s",
+                value, self.payment_state.value,
+            )
 
     def dispatch_bill(self, value: int) -> None:
-        if self._on_bill:
-            self._on_bill(value)
+        if self.payment_state in (PaymentState.SIGNUP, PaymentState.TOPUP):
+            if self._on_bill:
+                self._on_bill(value)
+        else:
+            logger.warning(
+                "[AppState] Bill event P%d ignored — payment_state=%s",
+                value, self.payment_state.value,
+            )
 
     def dispatch_dispense_complete(self) -> None:
         if self._on_dispense_complete:

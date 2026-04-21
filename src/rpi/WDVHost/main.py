@@ -32,12 +32,16 @@ import customtkinter as ctk
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
-
-from app_state import AppState
+# ── Logging must be set up before any other local import ──────────────────────────
+from logger_config import setup_logging, get_logger
+setup_logging()
+logger = get_logger(__name__)
+from app_state import AppState, PaymentState
 from serial_manager import SerialManager
 from serial_second_esp import SecondESPSerial
 from qr_scanner import QRScanner
 from thermal_printer import ThermalPrinter
+from offline_queue import OfflineQueue
 from ui.theme import C, WIN_W, WIN_H, SIDEBAR_W
 
 # ── Import all page classes ───────────────────────────────────────────────────
@@ -70,6 +74,14 @@ _SIDEBAR_HIDDEN_PAGES = {
 
 # Pages where the on-screen keyboard toggle button is shown
 _KEYBOARD_PAGES = {"signin", "register", "forgot"}
+
+# Payment state machine: which page activates which PaymentState.
+# Pages NOT listed here default to PaymentState.IDLE.
+_PAGE_PAYMENT_STATE: dict = {
+    "register":   PaymentState.SIGNUP,
+    "topup_cash": PaymentState.TOPUP,
+    "dispensing": PaymentState.DISPENSING,
+}
 
 
 class MainApp(ctk.CTk):
@@ -106,6 +118,11 @@ class MainApp(ctk.CTk):
         # ── Shared state ──────────────────────────────────────────────────────
         self.app_state = AppState()
 
+        # ── Offline sync queue (Firebase resilience) ─────────────────────────────────
+        self.offline_queue = OfflineQueue()
+        self.offline_queue.start()
+        self.app_state._offline_queue = self.offline_queue  # inject reference
+
         # ── Serial manager ────────────────────────────────────────────────────
         from config import ESP_ACCEPTOR_PORT as _ESP_PORT  # noqa: E402
         port = _ESP_PORT if not simulation_mode else None
@@ -114,6 +131,7 @@ class MainApp(ctk.CTk):
             port=port,
         )
         self.serial_mgr.start()
+        logger.info("[MainApp] SerialManager started (port=%s, sim=%s).", port, simulation_mode)
 
         # ── Second ESP32 (ESPWDV) — direct USB serial fallback ─────────────
         # When ESP-Now MAC addresses are correctly configured, ESPWDV sensor
@@ -127,6 +145,7 @@ class MainApp(ctk.CTk):
             port=disp_port,
         )
         self.second_esp.start()
+        logger.info("[MainApp] SecondESPSerial started (port=%s).", disp_port)
 
         # ── QR scanner (USB HID keyboard-mode) ────────────────────────────────
         self.qr_scanner = QRScanner(
@@ -145,12 +164,14 @@ class MainApp(ctk.CTk):
         if printer_port:
             connected = self.printer.connect()
             if connected:
-                print(f"[MainApp] Thermal printer connected on {printer_port}.")
+                logger.info("[MainApp] Thermal printer connected on %s.", printer_port)
             else:
-                print(f"[MainApp] Thermal printer found on {printer_port} but failed to connect.")
+                logger.warning("[MainApp] Thermal printer found on %s but failed to connect.", printer_port)
         else:
-            print("[MainApp] No thermal printer detected – printing disabled.\n"
-                  "         Set PRINTER_PORT in config.py or as an env var (e.g. PRINTER_PORT=COM10).")
+            logger.warning(
+                "[MainApp] No thermal printer detected – printing disabled.\n"
+                "         Set PRINTER_PORT in config.py or as an env var (e.g. PRINTER_PORT=COM10)."
+            )
 
         # ── Layout: sidebar | content ─────────────────────────────────────────
         self.grid_columnconfigure(0, weight=0, minsize=SIDEBAR_W)
@@ -242,7 +263,7 @@ class MainApp(ctk.CTk):
         """Raise the named page and call its on_show() lifecycle hook."""
         page = self._pages.get(name)
         if page is None:
-            print(f"[MainApp] Unknown page: {name}")
+            logger.error("[MainApp] Unknown page: %s", name)
             return
 
         # Track previous page so pages like QRScanPage can navigate back
@@ -250,6 +271,16 @@ class MainApp(ctk.CTk):
         if current != name:
             self.prev_page = current
         self._current_page = name
+
+        # ── 1. Clear stale callbacks from the PREVIOUS page ───────────────────────────
+        # This prevents ghost coin/bill events from a page that was navigated
+        # away from without explicitly clearing its callbacks.
+        self.app_state.clear_callbacks()
+
+        # ── 2. Set payment state for the new page ───────────────────────────────────
+        # Pages not in the map get IDLE — acceptor events are ignored.
+        new_payment_state = _PAGE_PAYMENT_STATE.get(name, PaymentState.IDLE)
+        self.app_state.set_payment_state(new_payment_state)
 
         page.tkraise()
 
@@ -428,10 +459,12 @@ class MainApp(ctk.CTk):
     # ── Shutdown ──────────────────────────────────────────────────────────────
 
     def _on_close(self) -> None:
+        logger.info("[MainApp] Shutdown initiated.")
         self.qr_scanner.stop()
         self.serial_mgr.stop()
         self.second_esp.stop()
         self.printer.disconnect()
+        self.offline_queue.stop()
         self.destroy()
 
 

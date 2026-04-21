@@ -5,7 +5,9 @@ import platform
 import threading
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+from logger_config import get_logger
+
+logger = get_logger(__name__)
 
 # ── ESC/POS byte constants ────────────────────────────────────────────────────
 ESC = b"\x1b"
@@ -258,7 +260,25 @@ class ThermalPrinter:
                     return True
             except Exception as exc:
                 logger.error("Printer write error: %s", exc)
+                # Mark disconnected so the reconnect guard fires on next job
+                self._connected = False
+                if self._serial:
+                    try:
+                        self._serial.close()
+                    except Exception:
+                        pass
+                    self._serial = None
             return False
+
+    def _try_reconnect_if_needed(self) -> bool:
+        """
+        If the printer reports disconnected, attempt one reconnect.
+        Returns True if the printer is (or becomes) connected.
+        """
+        if self._connected:
+            return True
+        logger.info("Printer disconnected — attempting reconnect on %s", self._port)
+        return self.connect()
 
     # ── Public print API (all run in background threads) ───────────────────
 
@@ -304,7 +324,7 @@ class ThermalPrinter:
     # ── Background print jobs ──────────────────────────────────────────────
 
     def _job_receipt(self, txn: dict) -> None:
-        if not self._connected:
+        if not self._try_reconnect_if_needed():
             logger.warning("Printer not connected – skipping receipt.")
             return
 
@@ -351,7 +371,7 @@ class ThermalPrinter:
             logger.exception("Receipt print error: %s", exc)
 
     def _job_qr(self, data: str, header: str, subheader: str) -> None:
-        if not self._connected:
+        if not self._try_reconnect_if_needed():
             logger.warning("Printer not connected – skipping QR print.")
             return
 
@@ -381,7 +401,7 @@ class ThermalPrinter:
             logger.exception("QR print error: %s", exc)
 
     def _job_test(self) -> None:
-        if not self._connected:
+        if not self._try_reconnect_if_needed():
             logger.warning("Printer not connected – skipping test print.")
             return
 

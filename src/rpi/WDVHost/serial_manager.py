@@ -4,6 +4,9 @@ import re
 import time
 from typing import Optional
 
+from logger_config import get_logger
+
+logger = get_logger(__name__)
 
 _COIN_RE  = re.compile(r"Coin accepted: P(\d+)")
 _BILL_RE  = re.compile(r"Bill accepted: P(\d+)")
@@ -12,6 +15,13 @@ _TEMP_RE  = re.compile(r"^TEMP:(HOT|WARM|COLD):([-\d.]+)$")
 _WATER_RE = re.compile(r"^ESP:WATER:([01])$")
 _WATER_LEVEL_RE = re.compile(r"^ESP:WATER_LEVEL:([01])$")
 _ESP_RE   = re.compile(r"^ESP:(\w+):(.+)$")
+
+# Reconnect backoff bounds (seconds)
+_RECONNECT_MIN = 2.0
+_RECONNECT_MAX = 60.0
+
+# If no data received for this many seconds while port is open → assume stale
+_HEARTBEAT_TIMEOUT = 60.0
 
 
 class SerialManager:
@@ -44,6 +54,10 @@ class SerialManager:
         self._ser    = None
         self._running = False
         self._thread: Optional[threading.Thread] = None
+        # Reconnect state
+        self._reconnect_delay: float = _RECONNECT_MIN
+        # Heartbeat: track last successful read to detect stale-open ports
+        self._last_rx_time: float = 0.0
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -53,13 +67,15 @@ class SerialManager:
             try:
                 import serial  # type: ignore
                 self._ser = serial.Serial(self._port, self._baud, timeout=0.5)
-                print(f"[SerialManager] Connected: {self._port} @ {self._baud}")
+                self._last_rx_time = time.monotonic()
+                self._reconnect_delay = _RECONNECT_MIN
+                logger.info("[SerialManager] Connected: %s @ %d", self._port, self._baud)
                 self._request_initial_sensor_data()
             except Exception as exc:
-                print(f"[SerialManager] Cannot open {self._port}: {exc}")
+                logger.error("[SerialManager] Cannot open %s: %s", self._port, exc)
                 self._ser = None
         else:
-            print("[SerialManager] No port – running in simulation mode.")
+            logger.info("[SerialManager] No port – running in simulation mode.")
 
         self._running = True
         self._thread = threading.Thread(target=self._reader, daemon=True, name="serial-reader")
@@ -68,7 +84,10 @@ class SerialManager:
     def stop(self) -> None:
         self._running = False
         if self._ser and self._ser.is_open:
-            self._ser.close()
+            try:
+                self._ser.close()
+            except Exception:
+                pass
 
     # ── Reader thread ─────────────────────────────────────────────────────────
 
@@ -79,19 +98,23 @@ class SerialManager:
                 try:
                     raw = self._ser.readline()
                     if raw:
+                        self._last_rx_time = time.monotonic()
                         line = raw.decode("utf-8", errors="replace").strip()
                         if line:
                             self._parse(line)
+                    else:
+                        # readline() timed out — check heartbeat
+                        self._check_heartbeat()
                 except serial.SerialException:
-                    print(f"[SerialManager] Device disconnected: {self._port}")
+                    logger.warning("[SerialManager] Device disconnected: %s", self._port)
                     self._close_port()
-                    time.sleep(0.1)
+                    time.sleep(0.5)
                 except Exception as exc:
-                    print(f"[SerialManager] Read error: {exc}")
+                    logger.error("[SerialManager] Read error: %s", exc)
                     self._close_port()
-                    time.sleep(0.1)
+                    time.sleep(0.5)
             elif self._port:
-                # Port configured but not open — attempt reconnect
+                # Port configured but not open — attempt reconnect with backoff
                 self._try_reconnect()
             else:
                 # Simulation mode (port=None) — just idle
@@ -105,16 +128,33 @@ class SerialManager:
             pass
         self._ser = None
 
+    def _check_heartbeat(self) -> None:
+        """Close a stale-open port if no data has been received within the timeout."""
+        if self._last_rx_time == 0.0:
+            return
+        if (time.monotonic() - self._last_rx_time) > _HEARTBEAT_TIMEOUT:
+            logger.warning(
+                "[SerialManager] No data from %s for %.0fs — closing stale port.",
+                self._port, _HEARTBEAT_TIMEOUT,
+            )
+            self._close_port()
+
     def _try_reconnect(self) -> None:
         try:
             import serial  # type: ignore
             self._ser = serial.Serial(self._port, self._baud, timeout=0.5)
-            print(f"[SerialManager] Reconnected: {self._port} @ {self._baud}")
+            self._last_rx_time = time.monotonic()
+            self._reconnect_delay = _RECONNECT_MIN   # reset backoff on success
+            logger.info("[SerialManager] Reconnected: %s @ %d", self._port, self._baud)
             self._request_initial_sensor_data()
         except Exception as exc:
-            print(f"[SerialManager] Reconnect failed ({self._port}): {exc}")
+            logger.warning(
+                "[SerialManager] Reconnect failed (%s) — retry in %.0fs: %s",
+                self._port, self._reconnect_delay, exc,
+            )
             self._ser = None
-            time.sleep(2.0)
+            time.sleep(self._reconnect_delay)
+            self._reconnect_delay = min(self._reconnect_delay * 2, _RECONNECT_MAX)
 
     def _request_initial_sensor_data(self) -> None:
         """Ask ESPWDV (via Acceptor) for an immediate water-level and ping.
@@ -129,8 +169,7 @@ class SerialManager:
 
     def _parse(self, line: str) -> None:
         """Classify an ESP32 text line and put a typed event onto the queue."""
-        # Debug: print all incoming serial lines to help diagnose ESP-Now issues.
-        print(f"[SerialManager] RX: {line}")
+        logger.debug("[SerialManager] RX: %s", line)
 
         m = _COIN_RE.search(line)
         if m:
@@ -178,6 +217,10 @@ class SerialManager:
 
     # ── Command senders ───────────────────────────────────────────────────────
 
+    def is_connected(self) -> bool:
+        """Return True if the serial port to ESPWDVAcceptor is currently open."""
+        return bool(self._ser and self._ser.is_open)
+
     def send_command(self, cmd: str) -> None:
         """
         Send a command string to the ESP32 terminated with CRLF.
@@ -187,10 +230,10 @@ class SerialManager:
             try:
                 self._ser.write((cmd + "\r\n").encode("utf-8"))
             except Exception as exc:
-                print(f"[SerialManager] Send error: {exc}")
+                logger.error("[SerialManager] Send error: %s", exc)
                 self._close_port()
         else:
-            print(f"[SerialManager] (sim) Would send: {cmd}")
+            logger.debug("[SerialManager] (sim/disconnected) Would send: %s", cmd)
 
     def dispense(self, duration_ms: int) -> None:
         """Tell ESP32 to open the dispense relay for `duration_ms` ms."""

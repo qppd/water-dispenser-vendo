@@ -69,6 +69,9 @@ class RegisterPage(BasePage):
     # ── on_show: reset state every visit ──────────────────────────────────────
 
     def on_show(self) -> None:
+        # Always reset to a clean Guest user so leftover points from a
+        # previous abandoned registration (or hardware noise) can't persist.
+        self.app_state.user.points = 0
         self.app_state.reset_activation_cash()
         self._update_notice()
         self._btn_confirm.configure(state="disabled", fg_color="#cccccc")
@@ -106,7 +109,8 @@ class RegisterPage(BasePage):
     # ── Register ──────────────────────────────────────────────────────────────
 
     def _complete_registration(self) -> None:
-        if self.app_state.activation_cash_inserted() < ACTIVATION_FEE:
+        inserted = self.app_state.activation_cash_inserted()
+        if inserted < ACTIVATION_FEE:
             return
 
         username = self._e_user.get().strip() or "User"
@@ -122,11 +126,12 @@ class RegisterPage(BasePage):
             self.controller.show_alert("Missing Email", "Please enter a valid email address.")
             return
 
-        # Deduct full activation fee then award welcome bonus
-        self.app_state.user.points -= ACTIVATION_FEE
-        self.app_state.add_transaction("Activation Fee", -ACTIVATION_FEE)
-        self.app_state.user.points += WELCOME_BONUS
-        self.app_state.add_transaction("Welcome Bonus", WELCOME_BONUS)
+        # Calculate final balance explicitly:
+        #   change (overpayment refunded as points) + welcome bonus.
+        # Activation cash was tracked separately in _activation_cash and was
+        # NEVER added to user.points, so points must be set here, not adjusted.
+        change       = inserted - ACTIVATION_FEE
+        final_points = WELCOME_BONUS + change
 
         try:
             # ── Step 1: Create Firebase Auth account using real email ─────────
@@ -140,13 +145,21 @@ class RegisterPage(BasePage):
             self.app_state.user.phone    = phone
             self.app_state.user.is_guest = False
 
-            # ── Step 3: Save profile to RTDB (password stripped by storage.py) ─
+            # ── Step 3: Set points explicitly (clean, no partial state risk) ──
+            self.app_state.user.points = final_points
+
+            # Record accounting transactions in history
+            self.app_state.add_transaction("Activation Fee", -ACTIVATION_FEE)
+            self.app_state.add_transaction("Welcome Bonus", WELCOME_BONUS)
+            if change > 0:
+                self.app_state.add_transaction(f"Overpayment change ₱{change}", change)
+
+            # ── Step 4: Save profile to RTDB (password stripped by storage.py) ─
             storage.save_user(self.app_state.user.to_dict())
 
         except Exception as exc:
-            # Roll back the in-memory point adjustments if Firebase call fails
-            self.app_state.user.points += ACTIVATION_FEE
-            self.app_state.user.points -= WELCOME_BONUS
+            # Roll back in-memory state fully on Firebase failure
+            self.app_state.user.points = 0
             self.controller.show_alert(
                 "Registration Failed",
                 f"Could not create account:\n{exc}",

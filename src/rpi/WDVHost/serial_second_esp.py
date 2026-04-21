@@ -28,6 +28,14 @@ import re
 import time
 from typing import Optional
 
+from logger_config import get_logger
+
+logger = get_logger(__name__)
+
+# Reconnect backoff bounds (seconds)
+_RECONNECT_MIN = 2.0
+_RECONNECT_MAX = 60.0
+
 
 # ── Message parsers ────────────────────────────────────────────────────────────
 
@@ -66,6 +74,7 @@ class SecondESPSerial:
         self._ser     = None
         self._running = False
         self._thread: Optional[threading.Thread] = None
+        self._reconnect_delay: float = _RECONNECT_MIN
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -79,12 +88,13 @@ class SecondESPSerial:
                     self._baud,
                     timeout=0.5,
                 )
-                print(f"[SecondESPSerial] Connected: {self._port} @ {self._baud} baud")
+                self._reconnect_delay = _RECONNECT_MIN
+                logger.info("[SecondESPSerial] Connected: %s @ %d baud", self._port, self._baud)
             except Exception as exc:
-                print(f"[SecondESPSerial] Cannot open {self._port}: {exc}")
+                logger.error("[SecondESPSerial] Cannot open %s: %s", self._port, exc)
                 self._ser = None
         else:
-            print("[SecondESPSerial] No port – running in simulation mode.")
+            logger.info("[SecondESPSerial] No port – running in simulation mode.")
 
         self._running = True
         self._thread = threading.Thread(
@@ -98,11 +108,40 @@ class SecondESPSerial:
         """Signal the reader thread to exit and close the port."""
         self._running = False
         if self._ser and self._ser.is_open:
-            self._ser.close()
+            try:
+                self._ser.close()
+            except Exception:
+                pass
 
     # ── Reader thread (daemon) ─────────────────────────────────────────────────
 
+    def _close_port(self) -> None:
+        """Safely close the serial port and set ``_ser`` to None."""
+        try:
+            if self._ser and self._ser.is_open:
+                self._ser.close()
+        except Exception:
+            pass
+        self._ser = None
+
+    def _try_reconnect(self) -> None:
+        """Attempt to re-open the serial port with exponential backoff."""
+        try:
+            import serial  # type: ignore
+            self._ser = serial.Serial(self._port, self._baud, timeout=0.5)
+            self._reconnect_delay = _RECONNECT_MIN   # reset on success
+            logger.info("[SecondESPSerial] Reconnected: %s @ %d", self._port, self._baud)
+        except Exception as exc:
+            logger.warning(
+                "[SecondESPSerial] Reconnect failed (%s) — retry in %.0fs: %s",
+                self._port, self._reconnect_delay, exc,
+            )
+            self._ser = None
+            time.sleep(self._reconnect_delay)
+            self._reconnect_delay = min(self._reconnect_delay * 2, _RECONNECT_MAX)
+
     def _reader(self) -> None:
+        import serial  # type: ignore
         while self._running:
             if self._ser and self._ser.is_open:
                 try:
@@ -111,16 +150,28 @@ class SecondESPSerial:
                         line = raw.decode("utf-8", errors="replace").strip()
                         if line:
                             self._parse(line)
+                except serial.SerialException:
+                    logger.warning("[SecondESPSerial] Device disconnected: %s", self._port)
+                    self._close_port()
+                    time.sleep(0.5)
                 except Exception as exc:
-                    print(f"[SecondESPSerial] Read error: {exc}")
-                    time.sleep(0.1)
+                    logger.error("[SecondESPSerial] Read error: %s", exc)
+                    self._close_port()
+                    time.sleep(0.5)
+            elif self._port:
+                # Port configured but not open — attempt reconnect with backoff
+                self._try_reconnect()
             else:
-                # No serial connection – idle
+                # No serial connection (simulation mode) – idle
                 time.sleep(0.1)
+
+    def is_connected(self) -> bool:
+        """Return True if the serial port to ESPWDV is currently open."""
+        return bool(self._ser and self._ser.is_open)
 
     def _parse(self, line: str) -> None:
         """Classify an ESPWDV text line and push a typed event onto the queue."""
-        print(f"[ESPWDV] {line}")
+        logger.debug("[SecondESPSerial] RX: %s", line)
 
         # ── Temperature reading ────────────────────────────────────────────────
         m = _TEMP_RE.match(line)
