@@ -160,9 +160,11 @@ static void handleSerialCommand(const String& cmd) {
                       flow2.readFlowRate(), flow2.getTotalVolume());
     }
     else if (cmd == "WATER_LEVEL") {
-        Serial.printf("WATER_LEVEL: %s (raw: %d)\n",
-                      waterLevel.isWaterPresent() ? "PRESENT" : "LOW",
-                      waterLevel.rawRead());
+        int raw = waterLevel.rawRead();
+        bool present = waterLevel.isWaterPresent();
+        int threshold = waterLevel.getThreshold();
+        Serial.printf("WATER_LEVEL: raw=%d, threshold=%d, present=%s\n",
+                      raw, threshold, present ? "YES" : "NO");
     }
     // Flow accumulator reset
     else if (cmd == "FLOW1 RESET") { flow1.reset(); Serial.println("FLOW1 reset"); }
@@ -203,9 +205,13 @@ static void handleSerialCommand(const String& cmd) {
                       flow1.readFlowRate(), flow1.getTotalVolume());
         Serial.printf("FLOW2: %.3f L/min | Total: %.1f mL\n",
                       flow2.readFlowRate(), flow2.getTotalVolume());
-        Serial.printf("WATER_LEVEL: %s (raw: %d)\n",
-                      waterLevel.isWaterPresent() ? "PRESENT" : "LOW",
-                      waterLevel.rawRead());
+        {
+            int raw = waterLevel.rawRead();
+            bool present = waterLevel.isWaterPresent();
+            int threshold = waterLevel.getThreshold();
+            Serial.printf("WATER_LEVEL: raw=%d, threshold=%d, present=%s\n",
+                          raw, threshold, present ? "YES" : "NO");
+        }
         temp1.requestTemperature();
         temp2.requestTemperature();
         temp3.requestTemperature();

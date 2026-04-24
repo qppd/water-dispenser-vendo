@@ -15,8 +15,10 @@
 #define FLOW_SENSOR1_PIN 39
 #define FLOW_SENSOR2_PIN 35
 
-// ── Water Level Sensor (input-only GPIO 35, external pull-down required) ──────
-// S8050 NPN transistor output: HIGH = water present, LOW = no water.
+// ── Water Level Sensor (analog input, GPIO 34 — 12-bit ADC, 0-4095) ─────────
+// MakerLab Rain/Water Level Sensor (analog output)
+// Threshold comparison: analogRead > 1500 → water present
+// Calibrate by reading raw values: setThreshold(new_value) or modify WATER_LEVEL_THRESHOLD
 #define WATER_LEVEL_SENSOR_PIN 34
 
 // ── DS18B20 OneWire Temperature Sensors (one pin each) ───────────────────────

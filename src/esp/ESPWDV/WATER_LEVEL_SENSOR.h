@@ -4,25 +4,31 @@
 #include <Arduino.h>
 
 /*
- * WATER_LEVEL_SENSOR  —  Digital water-level detection module
+ * WATER_LEVEL_SENSOR  —  Analog water-level detection module
  *
  * Hardware:
- *   The sensor uses an S8050 NPN transistor as a switch.
- *   Ten interleaved copper traces are split into two sets:
- *     • Five traces connected to +5V through a 100-ohm resistor (power set).
- *     • Five traces connected to the transistor base (sense set).
- *   When water bridges the two sets, a small base current turns the
- *   transistor ON, pulling the output pin HIGH.
- *   When no water is present, the transistor is OFF and the output is LOW.
- *
- *   GPIO 35 on the ESP32 is input-only (no internal pull-up).
- *   An external 10 kΩ pull-down resistor is recommended on the signal line
- *   so the pin reads LOW cleanly when the sensor is dry.
+ *   MakerLab Rain/Water Level Sensor (analog output)
+ *   Operating voltage: DC 3-5V
+ *   Operating current: <20mA
+ *   Sensor type: Analog (outputs 0-4095 on ESP32 ADC)
+ *   Detection area: 40mm x 16mm
+ *   GPIO 34 on the ESP32 is ADC-capable (12-bit, 0-4095).
  *
  * Logic:
- *   isWaterPresent() → true  when pin reads HIGH (water detected)
- *   isWaterPresent() → false when pin reads LOW  (no water / dry)
+ *   - Reads analog value from sensor
+ *   - Compares against WATER_LEVEL_THRESHOLD (configurable, default: 1500)
+ *   - isWaterPresent() -> true if analogRead > threshold (water detected)
+ *   - isWaterPresent() -> false if analogRead <= threshold (dry)
+ *
+ * Calibration:
+ *   Call setThreshold(value) to adjust sensitivity.
+ *   Typical range: 1000-2000 depending on sensor condition.
+ *   Higher values = requires more water to trigger.
  */
+
+// Default threshold — water detected when analogRead() > this value
+// Adjust based on calibration: dry sensor ≈ 0-500, wet sensor ≈ 2500-4095
+#define WATER_LEVEL_THRESHOLD 1500
 
 class WaterLevelSensor {
 public:
@@ -34,11 +40,19 @@ public:
     // Return true if water is currently detected on the sensor.
     bool isWaterPresent() const;
 
-    // Return raw digitalRead value (HIGH = 1, LOW = 0).
+    // Return raw analog value (0-4095).
     int  rawRead() const;
+
+    // Set custom threshold for water detection.
+    void setThreshold(int threshold);
+
+    // Get current threshold.
+    int  getThreshold() const;
 
 private:
     uint8_t _pin;
+    int     _threshold;
 };
 
 #endif // WATER_LEVEL_SENSOR_H
+
