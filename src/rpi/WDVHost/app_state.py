@@ -48,13 +48,13 @@ CASH_VALUES = [1, 5, 10, 20, 50, 100]
 
 # ── Water Pump Configuration ───────────────────────────────────────────────────
 # PUMP_FLOW_RATE in L/min — adjust this value for calibration
-# Example: 1.5 L/min = 25 mL/sec, 1.2 L/min = 20 mL/sec
-PUMP_FLOW_RATE = 1.2  # L/min (reduced from 1.5 for longer dispense time)
+# Example: 1.5 L/min = 25 mL/sec, 1.2 L/min = 20 mL/sec, 1.0 L/min = 16.67 mL/sec
+PUMP_FLOW_RATE = 1.0  # L/min (reduced for longer dispense time)
 
 # Relay open duration (ms) per ml — based on pump flow rate
 # Formula: ms = round(volume_ml * 60_000 / (PUMP_FLOW_RATE * 1000))
-# At 1.2 L/min: 100ml=5000ms, 250ml=12500ms, 500ml=25000ms, 1000ml=50000ms
-ML_TO_MS = {100: 5000, 250: 12500, 500: 25000, 1000: 50000}
+# At 1.0 L/min: 100ml=6000ms, 250ml=15000ms, 500ml=30000ms, 1000ml=60000ms
+ML_TO_MS = {100: 6000, 250: 15000, 500: 30000, 1000: 60000}
 
 # Activation fee in pesos
 ACTIVATION_FEE = 10
