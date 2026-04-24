@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from serial_second_esp import SecondESPSerial
     from thermal_printer import ThermalPrinter
 
-from app_state import ML_TO_MS
+from app_state import ML_TO_MS, PUMP_FLOW_RATE
 
 # Relay mapping: temperature → relay number on ESPWDV
 # Warm is handled separately via RPI:WARM:<ms> (sequential hot+cold mixing).
@@ -61,7 +61,7 @@ def start_dispense(
     """
     duration_ms = ML_TO_MS.get(
         volume_ml,
-        max(1, round(volume_ml * 60_000 / 1_500)),
+        max(1, round(volume_ml * 60_000 / (PUMP_FLOW_RATE * 1000))),
     )
 
     if temperature == "Warm":
