@@ -243,6 +243,8 @@ static void handleSerialCommand(const String& cmd) {
 //   RPI:SSR1:0|OFF    turn SSR1 off
 //   RPI:SSR2:1|ON     turn SSR2 on / off
 //   RPI:SSR3:1|ON     turn SSR3 on / off
+//   RPI:INLET:ON      close inlet solenoid valve (stop filling, tank full)
+//   RPI:INLET:OFF     open inlet solenoid valve (allow filling, tank <full)
 //   RPI:STOP:0        emergency stop — close all relays
 static void handleRpiCommand(const String& msg) {
     if (!msg.startsWith("RPI:")) return;
@@ -289,6 +291,14 @@ static void handleRpiCommand(const String& msg) {
         operateSSR(SSR3_PIN, on);
         _ssr3Active = on;   // keep thermostat state in sync
         char buf[32]; snprintf(buf, sizeof(buf), "ESP:SSR3:%s", on ? "ON" : "OFF");
+        sendToAcceptor(buf);
+    } else if (command == "INLET") {
+        // Persistent inlet solenoid valve control (RELAY2)
+        // RPI:INLET:ON  → close valve (stop filling) — energize RELAY2
+        // RPI:INLET:OFF → open valve (allow filling) — de-energize RELAY2
+        bool closeValve = (value == "1" || value == "ON");
+        operateRELAY(RELAY2_PIN, !closeValve);  // active-LOW: false=close, true=open
+        char buf[32]; snprintf(buf, sizeof(buf), "ESP:INLET:%s", closeValve ? "CLOSED" : "OPEN");
         sendToAcceptor(buf);
     } else if (command == "STOP") {
         for (uint8_t i = 0; i < 3; i++) relayTimers[i].active = false;
