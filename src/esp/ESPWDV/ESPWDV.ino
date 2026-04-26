@@ -499,13 +499,9 @@ void loop() {
 
         // DEBUG: Log raw sensor value periodically (every 10 sec)
         static unsigned long _lastDebugMs = 0;
-        if ((nowMs - _lastDebugMs) >= 10000UL) {
+        if ((nowMs - _lastDebugMs) >= 3000UL) {
             int raw = waterLevel.rawRead();
-            int filtered = waterLevel.rawReadFiltered();
-            int threshold = waterLevel.getThreshold();
-            Serial.printf("[WATER_LEVEL_DEBUG] raw=%d filtered=%d threshold=%d state=%s interval=%lu\n",
-                          raw, filtered, threshold, nowPresent ? "FULL(1)" : "EMPTY(0)",
-                          (nowMs - _waterLevelSendMs));
+            nowPresent = raw;
             _lastDebugMs = nowMs;
         }
 
