@@ -27,8 +27,9 @@
  */
 
 // Default threshold — water detected when analogRead() > this value
-// Adjust based on calibration: dry sensor ≈ 0-500, wet sensor ≈ 2500-4095
-#define WATER_LEVEL_THRESHOLD 1500
+// Simple binary: below 300 = EMPTY (dry), above 300 = FULL (any water)
+// This avoids oscillation in the noise zone (1400-1900 range)
+#define WATER_LEVEL_THRESHOLD 300
 
 // Moving average filter: number of samples (1=no filter, higher=more stable)
 #define WATER_LEVEL_FILTER_SIZE 5
