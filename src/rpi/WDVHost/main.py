@@ -446,11 +446,14 @@ class MainApp(ctk.CTk):
                 self.sidebar.refresh_temps()
             elif etype == "water_level":
                 present = event.get("present", False)
+                logger.info("[MainApp] Water Level Update: present=%s", present)
                 self.app_state.update_water_level(present)
                 self.sidebar.refresh_water_level()
                 # Auto-control inlet solenoid valve (RELAY2):
                 # Tank full (100%, present=True)  → close inlet valve (stop filling).
                 # Tank not full (50%, present=False) → open inlet valve (allow filling).
+                logger.info("[MainApp] Setting inlet valve: close=%s (%s)", present, 
+                            "CLOSED (tank full)" if present else "OPEN (allow filling)")
                 self.serial_mgr.set_inlet_valve(close=present)
             # "raw" / "esp_status" lines are silently ignored here
 

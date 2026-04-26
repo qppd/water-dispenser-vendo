@@ -161,10 +161,11 @@ static void handleSerialCommand(const String& cmd) {
     }
     else if (cmd == "WATER_LEVEL") {
         int raw = waterLevel.rawRead();
+        int filtered = waterLevel.rawReadFiltered();
         bool present = waterLevel.isWaterPresent();
         int threshold = waterLevel.getThreshold();
-        Serial.printf("WATER_LEVEL: raw=%d, threshold=%d, present=%s\n",
-                      raw, threshold, present ? "YES" : "NO");
+        Serial.printf("WATER_LEVEL: raw=%d filtered=%d threshold=%d present=%s\n",
+                      raw, filtered, threshold, present ? "YES(1)" : "NO(0)");
     }
     // Flow accumulator reset
     else if (cmd == "FLOW1 RESET") { flow1.reset(); Serial.println("FLOW1 reset"); }
@@ -207,10 +208,11 @@ static void handleSerialCommand(const String& cmd) {
                       flow2.readFlowRate(), flow2.getTotalVolume());
         {
             int raw = waterLevel.rawRead();
+            int filtered = waterLevel.rawReadFiltered();
             bool present = waterLevel.isWaterPresent();
             int threshold = waterLevel.getThreshold();
-            Serial.printf("WATER_LEVEL: raw=%d, threshold=%d, present=%s\n",
-                          raw, threshold, present ? "YES" : "NO");
+            Serial.printf("WATER_LEVEL: raw=%d filtered=%d threshold=%d present=%s\n",
+                          raw, filtered, threshold, present ? "YES(1)" : "NO(0)");
         }
         temp1.requestTemperature();
         temp2.requestTemperature();
@@ -419,6 +421,12 @@ void loop() {
         }
     }
 
+    // ── 3.5. Update water-level sensor filter & debounce ─────────────────────
+    // Call update() every loop iteration to maintain the moving average filter
+    // and check for debounced state changes. This should be called frequently
+    // (every ~10-50 ms) for proper debouncing.
+    waterLevel.update();
+
     // ── 4. Non-blocking periodic temperature broadcast (every 5 s) ───────────
     //
     // Phase A: Every 5 seconds, start a conversion on all 3 sensors.
@@ -483,16 +491,30 @@ void loop() {
     // ── 6. Non-blocking periodic water-level broadcast (every 2 s) ───────────
     // Sends "ESP:WATER:1" when water is present, "ESP:WATER:0" when tank is low.
     // Also broadcasts immediately on state change (present ↔ low).
+    // The waterLevel.update() call above maintains filtered & debounced state.
     {
         bool nowPresent = waterLevel.isWaterPresent();
         bool stateChanged = (nowPresent != _lastWaterLevel);
         bool intervalElapsed = (nowMs - _waterLevelSendMs >= WATER_LEVEL_BROADCAST_INTERVAL_MS);
 
+        // DEBUG: Log raw sensor value periodically (every 10 sec)
+        static unsigned long _lastDebugMs = 0;
+        if ((nowMs - _lastDebugMs) >= 10000UL) {
+            int raw = waterLevel.rawRead();
+            int filtered = waterLevel.rawReadFiltered();
+            int threshold = waterLevel.getThreshold();
+            Serial.printf("[WATER_LEVEL_DEBUG] raw=%d filtered=%d threshold=%d state=%s interval=%lu\n",
+                          raw, filtered, threshold, nowPresent ? "FULL(1)" : "EMPTY(0)",
+                          (nowMs - _waterLevelSendMs));
+            _lastDebugMs = nowMs;
+        }
+
         if (stateChanged || intervalElapsed) {
             char wbuf[24];
             snprintf(wbuf, sizeof(wbuf), "ESP:WATER:%d", nowPresent ? 1 : 0);
             sendToAcceptor(wbuf);
-            Serial.println(wbuf);
+            Serial.printf("[WATER_LEVEL_TX] Sent: %s (changed=%d, interval_elapsed=%d)\n", 
+                          wbuf, stateChanged, intervalElapsed);
             _lastWaterLevel   = nowPresent;
             _waterLevelSendMs = nowMs;
         }

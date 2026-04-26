@@ -8,7 +8,7 @@
 
 // ── Regular Relays (active LOW) ───────────────────────────────────────────────
 #define RELAY1_PIN 19   // Solenoid Valve1 + Pump1
-#define RELAY2_PIN 18   // Solenoid Valve2 + Pump2
+#define RELAY2_PIN 18   // INLET SOLENOID VALVE (RPI:INLET command)
 #define RELAY3_PIN  5   // Solenoid Valve3 + Pump3
 
 // ── Flow Sensors (input-only GPIOs, external pull-up required) ────────────────

@@ -187,13 +187,17 @@ class SecondESPSerial:
         # ── Water-level broadcast (ESP:WATER:0 / ESP:WATER:1) ────────────────
         m = _WATER_RE.match(line)
         if m:
-            self._q.put({"type": "water_level", "present": m.group(1) == "1"})
+            present = m.group(1) == "1"
+            logger.info("[SecondESPSerial] Water Level RX: %s (present=%s)", line, present)
+            self._q.put({"type": "water_level", "present": present})
             return
 
         # ── Water-level query response (ESP:WATER_LEVEL:0 / 1) ───────────────
         m = _WATER_LEVEL_RE.match(line)
         if m:
-            self._q.put({"type": "water_level", "present": m.group(1) == "1"})
+            present = m.group(1) == "1"
+            logger.info("[SecondESPSerial] Water Level Response RX: %s (present=%s)", line, present)
+            self._q.put({"type": "water_level", "present": present})
             return
 
         # ── ESP status / completion messages ──────────────────────────────────
